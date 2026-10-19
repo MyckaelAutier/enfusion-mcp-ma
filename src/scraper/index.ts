@@ -1,4 +1,6 @@
-import { readHtmlFromZip, readFileFromZip } from "./source-local.js";
+import { resolve } from "node:path";
+import { localDocSource, dirDocSource, type DocSource } from "./source-local.js";
+import { downloadDocs } from "./source-remote.js";
 import {
   parseAnnotatedPage,
   parseClassPage,
@@ -14,10 +16,14 @@ export interface ScrapeOptions {
   source: "local" | "remote";
   workbenchPath: string;
   dataDir: string;
+  /** Remote only: where downloaded pages are kept (default: <repo>/.scraper-cache). */
+  cacheDir?: string;
+  /** Remote only: reuse pages already in the cache instead of re-downloading. */
+  resume?: boolean;
 }
 
-function scrapeLocalSource(
-  workbenchPath: string,
+function scrapeDocs(
+  docs: DocSource,
   source: "enfusion" | "arma"
 ): {
   classes: ClassInfo[];
@@ -31,9 +37,9 @@ function scrapeLocalSource(
   const wikiPages: WikiPage[] = [];
 
   // 1. Parse annotated.html for the class list
-  const annotatedHtml = readFileFromZip(workbenchPath, source, "annotated.html");
+  const annotatedHtml = docs.read("annotated.html");
   if (!annotatedHtml) {
-    logger.error(`Could not read annotated.html from ${source} zip`);
+    logger.error(`Could not read annotated.html from ${source} docs`);
     return { classes, groups, hierarchy, wikiPages };
   }
 
@@ -41,7 +47,7 @@ function scrapeLocalSource(
   logger.info(`Found ${classList.length} classes in ${source} annotated.html`);
 
   // 2. Parse hierarchy.html
-  const hierarchyHtml = readFileFromZip(workbenchPath, source, "hierarchy.html");
+  const hierarchyHtml = docs.read("hierarchy.html");
   if (hierarchyHtml) {
     hierarchy = parseHierarchyPage(hierarchyHtml);
     logger.info(`Parsed ${hierarchy.length} hierarchy nodes from ${source}`);
@@ -49,11 +55,7 @@ function scrapeLocalSource(
 
   // 3. Parse each class page
   let processed = 0;
-  for (const entry of readHtmlFromZip(
-    workbenchPath,
-    source,
-    /^interface[A-Z].*\.html$/
-  )) {
+  for (const entry of docs.list(/^interface[A-Za-z].*\.html$/)) {
     // Skip -members.html files
     if (entry.filename.includes("-members")) continue;
 
@@ -74,15 +76,11 @@ function scrapeLocalSource(
   logger.info(`Parsed ${classes.length} classes from ${source}`);
 
   // 4. Parse group pages
-  for (const entry of readHtmlFromZip(
-    workbenchPath,
-    source,
-    /^group__.*\.html$/
-  )) {
+  for (const entry of docs.list(/^group__.*\.html$/)) {
     try {
       const group = parseGroupPage(entry.html);
       if (group.name) {
-        groups.push(group);
+        groups.push({ ...group, source });
       }
     } catch (e) {
       logger.warn(`Failed to parse group ${entry.filename}: ${e}`);
@@ -91,11 +89,7 @@ function scrapeLocalSource(
   logger.info(`Parsed ${groups.length} groups from ${source}`);
 
   // 5. Parse tutorial pages (Page_*.html)
-  for (const entry of readHtmlFromZip(
-    workbenchPath,
-    source,
-    /^Page_.*\.html$/
-  )) {
+  for (const entry of docs.list(/^Page_.*\.html$/)) {
     try {
       const page = parseTutorialPage(entry.html, source, entry.filename);
       if (page.title) {
@@ -182,17 +176,31 @@ function scrapeLocalSource(
 export async function scrape(options: ScrapeOptions): Promise<void> {
   logger.info(`Starting scrape (source: ${options.source})`);
 
-  if (options.source === "remote") {
-    logger.error("Remote scraping not yet implemented in Phase 0. Use --source local.");
-    process.exit(1);
-  }
+  const cacheDir = options.cacheDir ?? resolve(options.dataDir, "..", ".scraper-cache");
+  const openDocs = async (source: "enfusion" | "arma"): Promise<DocSource> => {
+    if (options.source === "remote") {
+      const fallback = localDocSource(options.workbenchPath, source);
+      return dirDocSource(
+        await downloadDocs(source, resolve(cacheDir, source), options.resume, fallback)
+      );
+    }
+    const docs = localDocSource(options.workbenchPath, source);
+    if (!docs) throw new Error(`No local ${source} docs in ${options.workbenchPath}; try --source remote`);
+    return docs;
+  };
 
-  // Scrape both API sources from local zips
   logger.info("=== Scraping Enfusion Engine API ===");
-  const enfusion = scrapeLocalSource(options.workbenchPath, "enfusion");
+  const enfusion = scrapeDocs(await openDocs("enfusion"), "enfusion");
 
   logger.info("=== Scraping Arma Reforger API ===");
-  const arma = scrapeLocalSource(options.workbenchPath, "arma");
+  const arma = scrapeDocs(await openDocs("arma"), "arma");
+
+  // Never overwrite a good index with an empty one (e.g. download blocked).
+  if (enfusion.classes.length === 0 || arma.classes.length === 0) {
+    throw new Error(
+      `Scrape produced no classes (enfusion=${enfusion.classes.length}, arma=${arma.classes.length}); data/ left untouched`
+    );
+  }
 
   const output: ScrapeOutput = {
     enfusionClasses: enfusion.classes,

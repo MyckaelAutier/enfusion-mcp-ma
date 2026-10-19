@@ -9,11 +9,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 let source: "local" | "remote" = "local";
 let workbenchPath: string | undefined;
+let resume = false;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--source" && args[i + 1]) {
     source = args[i + 1] as "local" | "remote";
     i++;
+  } else if (args[i] === "--resume") {
+    resume = true;
   } else if (args[i] === "--workbench-path" && args[i + 1]) {
     workbenchPath = args[i + 1];
     i++;
@@ -27,4 +30,5 @@ await scrape({
   source,
   workbenchPath: workbenchPath || config.workbenchPath,
   dataDir,
+  resume,
 });

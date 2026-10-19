@@ -150,6 +150,27 @@ export class SearchEngine {
       }
     }
 
+    // Index global enums documented on group pages (className "" = not in a class)
+    for (const group of this.groups) {
+      for (const enumInfo of group.enums || []) {
+        const entry: EnumSearchResult = {
+          className: "",
+          classSource: group.source ?? "enfusion",
+          classGroup: group.name,
+          enumInfo,
+        };
+        for (const key of [enumInfo.name, ...enumInfo.values.map((v) => v.name)]) {
+          const k = key.toLowerCase();
+          let entries = this.enumIndex.get(k);
+          if (!entries) {
+            entries = [];
+            this.enumIndex.set(k, entries);
+          }
+          if (!entries.includes(entry)) entries.push(entry);
+        }
+      }
+    }
+
     // Detect enum-like classes (0 methods, 4+ properties) and index as synthetic enums
     for (const cls of allClasses) {
       const methodCount =

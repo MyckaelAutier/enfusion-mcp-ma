@@ -75,6 +75,10 @@ export interface GroupInfo {
   name: string;
   description: string;
   classes: string[];
+  /** Which docs set the group came from */
+  source?: "enfusion" | "arma";
+  /** Global (non-class) enums documented on the group page */
+  enums?: EnumInfo[];
 }
 
 /** Inheritance hierarchy node */

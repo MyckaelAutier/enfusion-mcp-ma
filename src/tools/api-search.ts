@@ -230,7 +230,7 @@ function formatEnumResult(results: EnumSearchResult[]): string {
     const r = results[i];
     const sourceLabel = r.classSource === "enfusion" ? "Enfusion Engine" : "Arma Reforger";
     const isEnumLike = r.enumInfo.description.startsWith("[Enum-like class]");
-    const label = isEnumLike ? "enum-like class" : `in ${r.className}`;
+    const label = isEnumLike ? "enum-like class" : r.className ? `in ${r.className}` : `global enum, group ${r.classGroup}`;
     lines.push(`${i + 1}. **${r.enumInfo.name}** (${label})`);
     if (r.enumInfo.description) {
       lines.push(`   ${r.enumInfo.description}`);
@@ -489,7 +489,7 @@ export function registerApiSearch(server: McpServer, searchEngine: SearchEngine)
               const valList = er.enumInfo.values.slice(0, 5).map((v) => v.name).join(", ");
               const suffix = er.enumInfo.values.length > 5 ? ", ..." : "";
               parts.push(
-                `**Enum:** ${er.className}.${er.enumInfo.name} { ${valList}${suffix} }\n${er.enumInfo.description || ""}\n(${sourceLabel}${er.classGroup ? ` > ${er.classGroup}` : ""})`
+                `**Enum:** ${er.className ? er.className + "." : ""}${er.enumInfo.name} { ${valList}${suffix} }\n${er.enumInfo.description || ""}\n(${sourceLabel}${er.classGroup ? ` > ${er.classGroup}` : ""})`
               );
             } else if (r.type === "property" && r.propertyResult) {
               const pr = r.propertyResult;

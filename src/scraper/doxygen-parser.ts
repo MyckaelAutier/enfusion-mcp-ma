@@ -13,6 +13,17 @@ import type {
 } from "../index/types.js";
 
 /**
+ * Load a Doxygen page, dropping noise that would leak into extracted text:
+ * code tooltips (div.ttc repeat the linked declaration) and "More..." links.
+ */
+function loadDoc(html: string): cheerio.CheerioAPI {
+  const $ = cheerio.load(html);
+  $("div.ttc").remove();
+  $("a").filter((_i, el) => $(el).text().trim() === "More...").remove();
+  return $;
+}
+
+/**
  * Parse the annotated.html (class list) page.
  * Returns an array of {name, url, brief} for each class.
  */
@@ -47,15 +58,16 @@ export function parseClassPage(
   source: "enfusion" | "arma",
   filename: string
 ): ClassInfo {
-  const $ = cheerio.load(html);
+  const $ = loadDoc(html);
 
   // Extract class name from title (remove child elements like ingroups first)
   const titleDiv = $("div.headertitle div.title").first().clone();
   titleDiv.children().remove();
   const titleText = titleDiv.text().trim();
+  // "Foo Interface Reference", or "array< Class T > Interface Template Reference" → "array"
   const name = titleText
-    .replace(/\s*Interface Reference\s*$/, "")
-    .replace(/\s*Class Reference\s*$/, "")
+    .replace(/\s*(Interface|Class)( Template)? Reference\s*$/, "")
+    .replace(/\s*<.*>$/, "")
     .trim();
 
   // Extract group from ingroups div
@@ -64,14 +76,15 @@ export function parseClassPage(
   // Extract brief description - the first paragraph after the content div
   const brief = $("div.contents > p").first().text().trim();
 
-  // Extract detailed description
-  const detailSection = $("div.textblock");
-  const description = detailSection.length
-    ? detailSection
-        .map((_i, el) => $(el).text().trim())
-        .get()
-        .join("\n\n")
-    : "";
+  // Extract detailed description (the "Examples" list is just links to
+  // Jenkins build paths — drop it)
+  const detailSection = $("div.textblock").clone();
+  detailSection.find("dl.section.examples").remove();
+  const description = detailSection
+    .map((_i, el) => $(el).text().trim())
+    .get()
+    .filter(Boolean)
+    .join("\n\n");
 
   // Extract inheritance from the image map
   const parents: string[] = [];
@@ -172,8 +185,11 @@ export function parseClassPage(
   // Parse public member functions
   const methods = parseMemberTable($, "pub-methods");
 
+  methods.push(...parseStrayProtoDeclarations($, methods));
+
   // Parse protected member functions
   const protectedMethods = parseMemberTable($, "pro-methods");
+  protectedMethods.push(...parseMemberTable($, "pro-static-methods"));
 
   // Parse static member functions
   const staticMethods = parseMemberTable($, "pub-static-methods");
@@ -183,6 +199,7 @@ export function parseClassPage(
 
   // Parse protected member variables
   const protectedProperties = parsePropertyTable($, "pro-attribs");
+  protectedProperties.push(...parsePropertyTable($, "pro-static-attribs"));
 
   // Parse static public attributes (constants, enum values in Enfusion)
   const staticAttribs = parsePropertyTable($, "pub-static-attribs");
@@ -191,11 +208,6 @@ export function parseClassPage(
 
   // Parse enum types (standard Doxygen pub-types — rare in Enfusion)
   const enums = parseEnumSection($);
-
-  // Enhance method descriptions with detailed docs
-  enrichMethodDescriptions($, methods);
-  enrichMethodDescriptions($, protectedMethods);
-  enrichMethodDescriptions($, staticMethods);
 
   // Extract source file if available
   const sourceFile = extractSourceFile($);
@@ -267,8 +279,8 @@ function parseMemberTable(
     if (rowClass.startsWith("memitem:")) {
       const returnType = $row.find("td.memItemLeft").text().trim();
       const rightCell = $row.find("td.memItemRight");
-      const nameLink = rightCell.find("a.el");
-      const methodName = nameLink.text().trim();
+      // First link is the member; later links are linked param types.
+      const methodName = rightCell.find("a.el").first().text().trim();
 
       if (!methodName) return;
 
@@ -279,22 +291,62 @@ function parseMemberTable(
       // Parse params from the signature text
       const params = parseParamsFromSignature(fullRight);
 
-      // Get description from next memdesc row
+      // Brief from the memdesc row; prefer the detailed doc when it says more
       const hash = rowClass.split(":")[1];
       const descRow = table.find(`tr.memdesc\\:${hash}`);
-      const desc = descRow.find("td.mdescRight").text().trim();
+      const brief = descRow.find("td.mdescRight").text().trim();
+      const detail = memberDetail($, hash);
 
       methods.push({
         name: methodName,
         returnType,
         signature,
         params,
-        description: desc,
+        description: detail.length > brief.length ? detail : brief,
       });
     }
   });
 
   return methods;
+}
+
+/**
+ * Doxygen sometimes fails mid-class on Enforce sources (an unterminated doc
+ * comment) and dumps the remaining declarations verbatim into a code fragment
+ * inside some member's docs — e.g. WorldEditorAPI.DeleteEntity /
+ * LockEntityLayer / GetCurrentEntityLayerId only exist there. Recover any
+ * full `proto ... Name(...);` line, using preceding `*` comment lines as its description.
+ */
+function parseStrayProtoDeclarations(
+  $: cheerio.CheerioAPI,
+  known: MethodInfo[]
+): MethodInfo[] {
+  const seen = new Set(known.map((m) => m.name));
+  const found: MethodInfo[] = [];
+  let comment: string[] = [];
+
+  $("div.fragment div.line").each((_i, el) => {
+    const line = $(el).text().replace(/\s+/g, " ").trim();
+    const m = line.match(/^(proto\b[^;(]*?)\s*\b(\w+)\s*\(([^)]*)\)\s*;$/);
+    if (!m) {
+      comment = line.startsWith("*") ? [...comment, line.replace(/^\*+\s*/, "")] : [];
+      return;
+    }
+    const [, returnType, name, paramStr] = m;
+    if (!seen.has(name)) {
+      seen.add(name);
+      found.push({
+        name,
+        returnType,
+        signature: `${returnType} ${name} (${paramStr})`,
+        params: parseParamsFromSignature(`(${paramStr})`),
+        description: comment.join(" "),
+      });
+    }
+    comment = [];
+  });
+
+  return found;
 }
 
 function parseParamsFromSignature(
@@ -381,8 +433,7 @@ function parsePropertyTable(
     if (rowClass.startsWith("memitem:")) {
       const propType = $row.find("td.memItemLeft").text().trim();
       const rightCell = $row.find("td.memItemRight");
-      const nameLink = rightCell.find("a.el");
-      const propName = nameLink.text().trim() || rightCell.text().trim();
+      const propName = rightCell.find("a.el").first().text().trim() || rightCell.text().trim();
 
       if (!propName) return;
 
@@ -410,8 +461,8 @@ function parsePropertyTable(
 function parseEnumSection($: cheerio.CheerioAPI): EnumInfo[] {
   const enums: EnumInfo[] = [];
 
-  // Look for pub-types section (could also be pro-types)
-  for (const sectionId of ["pub-types", "pro-types"]) {
+  // pub-types/pro-types on class pages; enum-members on group pages (global enums)
+  for (const sectionId of ["pub-types", "pro-types", "enum-members"]) {
     const headingAnchor = $(`a#${sectionId}`);
     if (!headingAnchor.length) continue;
 
@@ -442,8 +493,7 @@ function parseEnumSection($: cheerio.CheerioAPI): EnumInfo[] {
       if (rowClass.startsWith("memitem:")) {
         const leftText = $row.find("td.memItemLeft").text().trim();
         const rightCell = $row.find("td.memItemRight");
-        const nameLink = rightCell.find("a.el");
-        const enumName = nameLink.text().trim();
+        const enumName = rightCell.find("a.el").first().text().trim();
 
         // Only process enum types (skip typedefs, classes)
         if (!enumName || !leftText.includes("enum")) return;
@@ -482,13 +532,7 @@ function parseEnumValuesFromBrief(
   const values: EnumValue[] = [];
 
   // Strategy 1: Look for detailed documentation with fieldtable
-  // Doxygen puts enum detail in a memdoc div keyed by the member anchor hash
-  const detailAnchor = $(`a#${memberHash}`).closest("div.memdoc");
-  // Fallback: try memtitle sibling
-  const memtitle = $(`a[id="${memberHash}"]`).closest("h2.memtitle");
-  const memdoc = detailAnchor.length
-    ? detailAnchor
-    : memtitle.next("div.memdoc");
+  const memdoc = memberDoc($, memberHash);
 
   if (memdoc.length) {
     const fieldTable = memdoc.find("table.fieldtable");
@@ -553,54 +597,32 @@ function parseEnumValuesFromBrief(
 }
 
 /**
- * Enrich method descriptions with detailed documentation from memdoc sections.
- * Doxygen puts detailed method docs in sections with:
- *   <h2 class="memtitle"><span class="permalink">...</span>MethodName()</h2>
- *   <div class="memdoc"> ... detailed text ... </div>
- * We match by method name and replace the brief description if the detailed one is longer.
+ * The detail block for a member. Doxygen 1.13 emits, per member:
+ *   <a id="HASH"></a><h2 class="memtitle">…</h2>
+ *   <div class="memitem"><div class="memproto">…</div><div class="memdoc">…</div></div>
+ * Keying on the anchor hash (from the summary row's `memitem:HASH` class)
+ * keeps overloads apart, unlike matching on the method name.
  */
-function enrichMethodDescriptions(
-  $: cheerio.CheerioAPI,
-  methods: MethodInfo[]
-): void {
-  if (methods.length === 0) return;
+function memberDoc($: cheerio.CheerioAPI, hash: string): cheerio.Cheerio<AnyNode> {
+  return $(`a[id="${hash}"]`).nextAll("div.memitem").first().find("div.memdoc").first();
+}
 
-  // Build a map of method names to their memdoc contents
-  $("h2.memtitle").each((_i, heading) => {
-    const $heading = $(heading);
-    const memdoc = $heading.next("div.memdoc");
-    if (!memdoc.length) return;
-
-    // Extract method name from the heading text (strip permalink spans)
-    const headingClone = $heading.clone();
-    headingClone.find("span.permalink").remove();
-    const headingText = headingClone.text().trim();
-
-    // The heading typically shows "MethodName()" — extract just the name
-    const nameMatch = headingText.match(/^(\w+)\s*\(/);
-    if (!nameMatch) return;
-    const methodName = nameMatch[1];
-
-    // Find the matching method(s) and enrich their description
-    const detailedText = memdoc.text().trim();
-    if (!detailedText) return;
-
-    // Trim to a reasonable length to avoid massive descriptions
-    const maxLen = 500;
-    const trimmedDetail = detailedText.length > maxLen
-      ? detailedText.slice(0, maxLen) + "..."
-      : detailedText;
-
-    for (const method of methods) {
-      if (method.name === methodName && trimmedDetail.length > method.description.length) {
-        method.description = trimmedDetail;
-      }
-    }
-  });
+/** Detailed doc text for a member, collapsed and capped at 500 chars. */
+function memberDetail($: cheerio.CheerioAPI, hash: string): string {
+  const text = memberDoc($, hash).text().replace(/\s+/g, " ").trim();
+  return text.length > 500 ? text.slice(0, 500) + "..." : text;
 }
 
 function extractSourceFile($: cheerio.CheerioAPI): string {
-  // Look for "Definition at line X of file Y" text
+  // Doxygen 1.13: "...generated from the following file:<ul><li>Game/GameMode/<b>X.c</b></li></ul>"
+  const generatedFrom = $("div.contents ul li")
+    .filter((_i, el) => /\.c$/.test($(el).text().trim()))
+    .first()
+    .text()
+    .trim();
+  if (generatedFrom) return generatedFrom;
+
+  // Older Doxygen: "Definition at line X of file Y"
   const definitionText = $("div.contents")
     .find("p")
     .filter((_i, el) => $(el).text().includes("Definition at line"))
@@ -709,7 +731,7 @@ export function parseHierarchyPage(html: string): HierarchyNode[] {
  * Parse a group page (group__[Name].html).
  */
 export function parseGroupPage(html: string): GroupInfo {
-  const $ = cheerio.load(html);
+  const $ = loadDoc(html);
 
   const titleText = $("div.headertitle div.title").first().text().trim();
   const name = titleText.replace(/\s*Module Reference\s*$/, "").trim();
@@ -732,7 +754,7 @@ export function parseGroupPage(html: string): GroupInfo {
     }
   });
 
-  return { name, description, classes };
+  return { name, description, classes, enums: parseEnumSection($) };
 }
 
 /**
