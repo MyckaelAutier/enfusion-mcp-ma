@@ -13,7 +13,7 @@
     },
     {
       "type": "VehicleAnimationComponent",
-      "properties": { "m_sAnimationGraph": "" },
+      "properties": { "AnimGraph": "" },
       "comment": "Path to vehicle animation graph (.agr)"
     }
   ],

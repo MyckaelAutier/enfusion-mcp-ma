@@ -9,14 +9,12 @@ describe("generatePrefab", () => {
     expect(node.type).toBe("GenericEntity");
   });
 
-  it("generates spawnpoint prefab with recipe override components", () => {
+  it("generates spawnpoint prefab as an SCR_SpawnPoint entity", () => {
     const text = generatePrefab({ name: "MySpawn", prefabType: "spawnpoint" });
     const node = parse(text);
-    expect(node.type).toBe("GenericEntity");
-    const comps = node.children.find((c) => c.type === "components");
-    expect(comps).toBeDefined();
-    const spawnComp = comps!.children.find((c) => c.type === "SCR_SpawnPoint");
-    expect(spawnComp).toBeDefined();
+    // SCR_SpawnPoint is the entity class, not a component
+    expect(node.type).toBe("SCR_SpawnPoint");
+    expect(node.inheritance).toBe("Prefabs/MP/Spawning/SpawnPoint_Base.et");
   });
 
   it("generates character prefab", () => {
@@ -25,7 +23,7 @@ describe("generatePrefab", () => {
     expect(node.type).toBe("SCR_ChimeraCharacter");
     const comps = node.children.find((c) => c.type === "components");
     expect(comps).toBeDefined();
-    // Recipe components should be present (MeshObject, CharacterAnimationComponent)
+    // Recipe components should be present (MeshObject, SCR_CharacterAnimationComponent)
     expect(comps!.children.length).toBeGreaterThan(0);
   });
 
@@ -73,7 +71,7 @@ describe("generatePrefab", () => {
       name: "Custom",
       prefabType: "generic",
       components: [
-        { type: "RigidBody", properties: { m_fMass: "10" } },
+        { type: "RigidBody", properties: { Mass: "10" } },
       ],
     });
     const node = parse(text);
@@ -81,7 +79,7 @@ describe("generatePrefab", () => {
     expect(comps).toBeDefined();
     const rb = comps!.children.find((c) => c.type === "RigidBody");
     expect(rb).toBeDefined();
-    const massProp = rb!.properties.find((p) => p.key === "m_fMass");
+    const massProp = rb!.properties.find((p) => p.key === "Mass");
     expect(massProp).toBeDefined();
     expect(massProp!.value).toBe("10");
   });
@@ -168,8 +166,8 @@ describe("generatePrefab", () => {
       ["building", "SCR_DestructibleBuildingEntity"],
       ["item", "GenericEntity"],
       ["group", "SCR_AIGroup"],
-      ["spawnpoint", "GenericEntity"],
-      ["gamemode", "GenericEntity"],
+      ["spawnpoint", "SCR_SpawnPoint"],
+      ["gamemode", "SCR_BaseGameMode"],
       ["generic", "GenericEntity"],
     ];
 

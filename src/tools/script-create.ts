@@ -68,12 +68,16 @@ export function registerScriptCreate(server: McpServer, config: Config, searchEn
               ...(cls.methods || []),
               ...(cls.protectedMethods || []),
             ];
+            // proto/static methods can't be overridden from script, and stubbing
+            // plain getters/setters with an empty body would break the parent.
             const overridable = allMethods.filter((m) =>
-              /^(On|EOn|Get|Set|Can|Handle|Do)/.test(m.name) ||
-              m.signature.includes("event")
+              !/\b(proto|static)\b/.test(m.signature) &&
+              (/^(On|EOn|Can|Handle)/.test(m.name) || /\bevent\b/.test(m.signature))
             );
             if (overridable.length > 0) {
-              dynamicMethods = overridable.slice(0, 8).map((m) => m.signature);
+              dynamicMethods = overridable
+                .slice(0, 8)
+                .map((m) => m.signature.replace(/\bevent\s+/, ""));
             }
           }
         }

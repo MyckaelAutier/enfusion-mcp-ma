@@ -777,13 +777,28 @@ modded class SCR_GameModeCampaign
             GetGame().GetCallqueue().CallLater(LoadLatestSave, 3000);
     }
 
+    // 1.8: SCR_SaveGameManager is gone — use SaveGameManager (async GetSaves).
+    // Full version: modded-gamemode-cookbook.md, Pattern 7.
+    protected ref SaveGameObtainCallback m_AutoLoadSavesCallback;
+
     protected void LoadLatestSave()
     {
-        SCR_SaveGameManager saveMgr = SCR_SaveGameManager.GetInstance();
-        array<string> saves = {};
-        saveMgr.GetAvailableSaves(saves);
-        if (!saves.IsEmpty())
-            saveMgr.Load(saves[saves.Count() - 1]);
+        SaveGameManager saveMgr = SaveGameManager.Get();
+        if (!saveMgr || saveMgr.GetActiveSave())
+            return;
+        m_AutoLoadSavesCallback = new SaveGameObtainCallback(OnAutoLoadSavesObtained);
+        saveMgr.GetSaves(SaveGameManager.GetCurrentMissionResource(), m_AutoLoadSavesCallback);
+    }
+
+    protected void OnAutoLoadSavesObtained(bool success, array<SaveGame> saves, Managed context = null)
+    {
+        if (!success || !saves || saves.IsEmpty())
+            return;
+        SaveGame latest;
+        foreach (SaveGame save : saves)
+            if (!latest || save.GetSavePointCreatedUnix() > latest.GetSavePointCreatedUnix())
+                latest = save;
+        SaveGameManager.Get().Load(latest);
     }
 
     override void OnGameModeEnd(SCR_GameModeEndData data)
@@ -862,18 +877,26 @@ modded class SCR_GameModeCampaign : SCR_BaseGameMode
 ```c
 modded class SCR_GameModeCampaign
 {
-    override bool CanPlayerSpawn_S(int playerId)
+    // 1.8 signature — spawn requests carry SCR_SpawnData, not a player id
+    override bool CanPlayerSpawn_S(SCR_SpawnRequestComponent requestComponent, SCR_SpawnHandlerComponent handlerComponent, SCR_SpawnData data, out SCR_ESpawnResult result = SCR_ESpawnResult.SPAWN_NOT_ALLOWED)
     {
-        if (!super.CanPlayerSpawn_S(playerId)) return false;
+        if (!super.CanPlayerSpawn_S(requestComponent, handlerComponent, data, result))
+            return false;
 
         // Custom check: e.g. minimum rank
-        SCR_ECharacterRank rank = GetPlayerRank(playerId);
-        if (rank < SCR_ECharacterRank.PRIVATE) return false;
+        PlayerController pc = requestComponent.GetPlayerController();
+        SCR_PlayerXPHandlerComponent xp;
+        if (pc)
+            xp = SCR_PlayerXPHandlerComponent.Cast(pc.FindComponent(SCR_PlayerXPHandlerComponent));
+        if (xp && xp.GetPlayerRankByXP() < SCR_ECharacterRank.PRIVATE)
+        {
+            result = SCR_ESpawnResult.NOT_ALLOWED_RANK_TOO_LOW;
+            return false;
+        }
 
-        // Check supplies at selected base
-        SCR_CampaignMilitaryBaseComponent base = GetSelectedBase(playerId);
-        if (base && base.GetSupplies() <= 0) return false;
-
+        // Supplies at the base owning the chosen spawn point:
+        // SCR_SpawnPointSpawnData.Cast(data).GetSpawnPoint().GetParent() → SCR_CampaignMilitaryBaseComponent
+        // (full example: modded-gamemode-cookbook.md, Pattern 8)
         return true;
     }
 }
@@ -882,10 +905,9 @@ modded class SCR_GameModeCampaign
 ### Checking Radio Coverage in Script
 
 ```c
-SCR_ERadioCoverageStatus coverage =
-    base.IsHQRadioTrafficPossible(playerFaction);
-
-if (coverage == SCR_ERadioCoverageStatus.NONE)
+// Returns bool and needs the campaign faction
+SCR_CampaignFaction campaignFaction = SCR_CampaignFaction.Cast(playerFaction);
+if (campaignFaction && !base.IsHQRadioTrafficPossible(campaignFaction))
     return false; // No coverage — can't spawn here
 ```
 

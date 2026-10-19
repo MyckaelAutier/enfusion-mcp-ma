@@ -10,16 +10,11 @@
       "type": "MeshObject",
       "properties": { "Object": "" },
       "comment": "Path to attachment .xob model"
-    },
-    {
-      "type": "WeaponAttachmentComponent",
-      "properties": { "m_SlotType": "" },
-      "comment": "Slot type: muzzle, barrel, receiver, stock, handguard, etc"
     }
   ],
   "postCreateNotes": [
     "Set MeshObject.Object to attachment model",
-    "Configure WeaponAttachmentComponent.m_SlotType (must match weapon slot)",
+    "Set InventoryItemComponent > WeaponAttachmentAttributes > AttachmentType (AttachmentMuzzle, AttachmentSuppressor, AttachmentOptics..., must match the weapon's AttachmentSlotComponent)",
     "Set attachment weight and handling impact if applicable",
     "Configure optical zero/convergence for optics",
     "Test compatibility with at least one base weapon"
@@ -30,7 +25,7 @@
       "description": "Sound suppressors/silencers",
       "defaultParent": "Prefabs/Weapons/Core/Suppressor_Base.et",
       "postCreateNotes": [
-        "Set m_SlotType to 'muzzle'",
+        "AttachmentType is AttachmentSuppressor (inherited from Suppressor_Base via SCR_WeaponAttachmentSuppressorAttributes)",
         "Configure sound reduction (0.7-0.9 multiplier typical)",
         "Set additional weight (~0.3-0.5 kg)"
       ]
@@ -40,7 +35,7 @@
       "description": "Weapon sights and scopes",
       "defaultParent": "Prefabs/Weapons/Core/WeaponSight_Base.et",
       "postCreateNotes": [
-        "Set m_SlotType to 'sight' or 'scope'",
+        "Set AttachmentType to the rail it mounts on (e.g. AttachmentOpticsRIS1913, AttachmentOpticsDovetailAK)",
         "Configure optical magnification (1x for reflex, 4x+ for scope)",
         "Set reticle texture and zero distance",
         "Configure eye relief and field of view"
@@ -51,7 +46,7 @@
       "description": "Flash hiders, brakes, and compensators",
       "defaultParent": "Prefabs/Weapons/Core/MuzzleDevice_Base.et",
       "postCreateNotes": [
-        "Set m_SlotType to 'muzzle'",
+        "AttachmentType is AttachmentMuzzle (inherited from MuzzleDevice_Base)",
         "Configure recoil reduction percentage",
         "Set flash hider effectiveness if applicable",
         "Define muzzle velocity impact"

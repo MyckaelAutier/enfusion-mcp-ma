@@ -10,16 +10,11 @@
       "type": "MeshObject",
       "properties": { "Object": "" },
       "comment": "Path to fuselage/hull .xob model"
-    },
-    {
-      "type": "RotorComponent",
-      "properties": { "m_sRotorModel": "" },
-      "comment": "Path to rotor blade .xob model (helicopter only)"
     }
   ],
   "postCreateNotes": [
     "Set MeshObject.Object to fuselage model",
-    "Configure rotor/propeller models and rotation speed",
+    "Configure rotors in VehicleHelicopterSimulation (Rotors array) - there is no separate rotor component",
     "Set up engine thrust and fuel consumption",
     "Define max altitude and airspeed",
     "Configure lift and drag coefficients",

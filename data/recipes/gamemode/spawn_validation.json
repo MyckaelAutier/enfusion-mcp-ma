@@ -5,26 +5,41 @@
   "category": "Respawn",
   "overrides": [
     {
-      "signature": "bool CanPlayerSpawn_S(int playerId)",
+      "signature": "bool CanPlayerSpawn_S(SCR_SpawnRequestComponent requestComponent, SCR_SpawnHandlerComponent handlerComponent, SCR_SpawnData data, out SCR_ESpawnResult result = SCR_ESpawnResult.SPAWN_NOT_ALLOWED)",
       "superCall": false,
       "body": [
-        "if (!super.CanPlayerSpawn_S(playerId)) return false;",
+        "if (!super.CanPlayerSpawn_S(requestComponent, handlerComponent, data, result))",
+        "    return false;",
         "",
-        "SCR_CampaignMilitaryBaseComponent base = GetSelectedBase(playerId);",
-        "if (base)",
+        "SCR_SpawnPointSpawnData spawnPointData = SCR_SpawnPointSpawnData.Cast(data);",
+        "if (!spawnPointData || !spawnPointData.GetSpawnPoint())",
+        "    return true;",
+        "",
+        "IEntity baseEntity = spawnPointData.GetSpawnPoint().GetParent();",
+        "if (!baseEntity)",
+        "    return true;",
+        "",
+        "SCR_CampaignMilitaryBaseComponent base = SCR_CampaignMilitaryBaseComponent.Cast(baseEntity.FindComponent(SCR_CampaignMilitaryBaseComponent));",
+        "if (!base)",
+        "    return true;",
+        "",
+        "SCR_CampaignFaction faction = SCR_CampaignFaction.Cast(SCR_FactionManager.SGetPlayerFaction(requestComponent.GetPlayerId()));",
+        "if (faction && !base.IsHQRadioTrafficPossible(faction))",
         "{",
-        "    Faction faction = GetPlayerFaction(playerId);",
-        "    if (base.IsHQRadioTrafficPossible(faction) == SCR_ERadioCoverageStatus.NONE)",
-        "        return false;",
+        "    result = SCR_ESpawnResult.SPAWN_NOT_ALLOWED;",
+        "    return false;",
+        "}",
         "",
-        "    if (base.GetSupplyLimit() > 0 && base.GetScarcityLevel() <= 0)",
-        "        return false;",
+        "if (base.GetSupplyLimit() > 0 && base.GetScarcityLevel() <= 0)",
+        "{",
+        "    result = SCR_ESpawnResult.SPAWN_NOT_ALLOWED;",
+        "    return false;",
         "}",
         "return true;"
       ]
     }
   ],
   "notes": [
-    "GetSelectedBase / GetPlayerFaction are illustrative — wire them to your base/faction lookups"
+    "Signature matches SCR_GameModeCampaign.CanPlayerSpawn_S in Arma Reforger 1.8 (spawn requests carry SCR_SpawnData, not a player id)"
   ]
 }

@@ -57,7 +57,7 @@ const GAMEMODE_METHODS = [
     body: "    super.OnPlayerConnected(playerId);\n    // Called when a player connects",
   },
   {
-    signature: "override void OnPlayerDisconnected(int playerId, KickCauseGroup cause, int timeout)",
+    signature: "override void OnPlayerDisconnected(int playerId, KickCauseCode cause, int timeout)",
     body: "    super.OnPlayerDisconnected(playerId, cause, timeout);\n    // Called when a player disconnects",
   },
   {

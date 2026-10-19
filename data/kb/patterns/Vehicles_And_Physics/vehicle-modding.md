@@ -6,7 +6,7 @@
 
 | Component | Role / Key Properties |
 |---|---|
-| `SCR_VehicleDamageMangerComponent` | `HP Max`, `HP Damaged` (smoke threshold), `Collision Multiplier`, `Collision Velocity Threshold`, `Wreck Model`, destruction/burning particle resources |
+| `SCR_VehicleDamageManagerComponent` | `HP Max`, `HP Damaged` (smoke threshold), `Collision Multiplier`, `Collision Velocity Threshold`, `Wreck Model`, destruction/burning particle resources |
 | `FuelManagerComponent` | `SCR_FuelNode` array (one per tank): `Fuel Type`, `Max Fuel`, `Initial Fuel Tank State` |
 | `SCR_FuelConsumptionComponent` | `Fuel Consumption` in liters/hour at max power RPM |
 | `VehicleWheeledSimulation` | Engine (`Max Power` kW, `Max Torque` Nm), Clutch, Gearbox, Differentials, Axles (`Max Steering Angle` degrees) |

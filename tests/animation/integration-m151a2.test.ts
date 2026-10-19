@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import {
   parseAgrToStruct, parseAgfToStruct, parseAstToStruct,
   parseAsiToStruct, parseAwToStruct,
@@ -11,13 +11,16 @@ import {
 import { validateGraph } from "../../src/animation/validator.js";
 import { generateSuggestions, formatSuggestions } from "../../src/animation/suggestions.js";
 
-const BASE = "C:/Users/Steffen/Documents/My Games/ArmaReforgerWorkbench/profile/TESTANIM";
+// Needs the M151A2 animation files from a local Workbench profile; set TESTANIM_DIR to run.
+const BASE = process.env.TESTANIM_DIR ?? "C:/Users/Steffen/Documents/My Games/ArmaReforgerWorkbench/profile/TESTANIM";
+
+const HAS_FILES = existsSync(`${BASE}/M151A2.agr`);
 
 function readFile(name: string): string {
-  return readFileSync(`${BASE}/${name}`, "utf-8");
+  return HAS_FILES ? readFileSync(`${BASE}/${name}`, "utf-8") : "";
 }
 
-describe("M151A2 Integration", () => {
+describe.skipIf(!HAS_FILES)("M151A2 Integration", () => {
   const agrContent = readFile("M151A2.agr");
   const agfContent = readFile("M151A2.agf");
   const astContent = readFile("M151A2.ast");

@@ -10,16 +10,11 @@
       "type": "MeshObject",
       "properties": { "Object": "" },
       "comment": "Path to building .xob model"
-    },
-    {
-      "type": "DestructionComponent",
-      "properties": { "m_iDestructionStages": "3" },
-      "comment": "Number of destruction stages (damaged, heavily damaged, destroyed)"
     }
   ],
   "postCreateNotes": [
     "Set MeshObject.Object to building model",
-    "Configure destruction stages and models",
+    "Configure destruction on the SCR_DestructibleBuildingEntity itself, or add SCR_DestructionMultiPhaseComponent for phased destruction",
     "Set up armor/structural integrity values",
     "Define spawn points or interior waypoints if applicable",
     "Configure ambient effects (fire, smoke) on destruction",

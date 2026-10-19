@@ -7,18 +7,12 @@
   "defaultParent": "Prefabs/Groups/PlayableGroup.et",
   "overrideComponents": [
     {
-      "type": "SCR_AIGroup",
-      "properties": { "m_sFactionKey": "" },
-      "comment": "Faction key (US, USSR, FIA, or custom)"
-    },
-    {
-      "type": "SCR_GroupIdentity",
-      "properties": { "m_sCallsign": "" },
-      "comment": "Group callsign/name"
+      "type": "SCR_CallsignGroupComponent",
+      "comment": "Callsign assignment (inherited from PlayableGroup)"
     }
   ],
   "postCreateNotes": [
-    "Set faction key in SCR_AIGroup.m_sFactionKey",
+    "Set the faction key (US, USSR, FIA or custom) in m_faction on the SCR_AIGroup entity itself",
     "Configure group callsign and unit type",
     "Set up group composition (squad leader + members)",
     "Define AI behavior and skill levels",

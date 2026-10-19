@@ -3,8 +3,12 @@
   "name": "Auto-Load Latest Save",
   "description": "Automatically resume from the most recent save when the server restarts (PvE).",
   "category": "SaveLoad",
+  "attributes": [
+    "protected ref SaveGameObtainCallback m_AutoLoadSavesCallback;"
+  ],
   "methods": [
-    "protected void LoadLatestSave()\n{\n    SCR_SaveGameManager saveMgr = SCR_SaveGameManager.GetInstance();\n    if (!saveMgr) return;\n    array<string> saves = {};\n    saveMgr.GetAvailableSaves(saves);\n    if (!saves.IsEmpty())\n        saveMgr.Load(saves[saves.Count() - 1]);\n}"
+    "protected void LoadLatestSave()\n{\n    SaveGameManager saveMgr = SaveGameManager.Get();\n    if (!saveMgr || saveMgr.GetActiveSave())\n        return; // already resumed from a save\n\n    m_AutoLoadSavesCallback = new SaveGameObtainCallback(OnAutoLoadSavesObtained);\n    saveMgr.GetSaves(SaveGameManager.GetCurrentMissionResource(), m_AutoLoadSavesCallback);\n}",
+    "protected void OnAutoLoadSavesObtained(bool success, array<SaveGame> saves, Managed context = null)\n{\n    if (!success || !saves || saves.IsEmpty())\n        return;\n\n    SaveGame latest;\n    foreach (SaveGame save : saves)\n    {\n        if (!save.IsSavePointGameVersionCompatible() || !save.AreSavePointAddonsCompatible())\n            continue;\n        if (!latest || save.GetSavePointCreatedUnix() > latest.GetSavePointCreatedUnix())\n            latest = save;\n    }\n\n    if (latest)\n        SaveGameManager.Get().Load(latest);\n}"
   ],
   "overrides": [
     {
@@ -17,6 +21,7 @@
     }
   ],
   "notes": [
-    "Confirm SCR_SaveGameManager API names against your game version before shipping"
+    "Uses the 1.8 persistence API (SaveGameManager / SaveGame); SCR_SaveGameManager no longer exists",
+    "Saves must be enabled for the scenario (SaveGameManager.IsSavingEnabled)"
   ]
 }

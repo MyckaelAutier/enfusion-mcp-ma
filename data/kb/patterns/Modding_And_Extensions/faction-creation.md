@@ -116,7 +116,8 @@ Faction owner = base.GetFaction();
 string key = owner.GetFactionKey(); // "US", "USSR", "FIA"
 
 // Radio coverage check (faction-specific)
-SCR_ERadioCoverageStatus status = base.IsHQRadioTrafficPossible(faction);
+// returns bool; direction defaults to SCR_ERadioCoverageStatus.RECEIVE
+bool covered = base.IsHQRadioTrafficPossible(SCR_CampaignFaction.Cast(faction));
 ```
 
 ### Loadout manager per faction

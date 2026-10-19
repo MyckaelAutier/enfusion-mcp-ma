@@ -12,14 +12,14 @@
       "comment": "Path to character skeleton/rig .xob model"
     },
     {
-      "type": "CharacterAnimationComponent",
-      "properties": { "m_AnimationScript": "" },
-      "comment": "Path to character animation graph (.agr)"
+      "type": "SCR_CharacterAnimationComponent",
+      "properties": { "AnimGraph": "", "AnimInstance": "" },
+      "comment": "Animation graph (.agr) and instance (.asi); Character_Base uses anims/workspaces/player/player_main.*"
     }
   ],
   "postCreateNotes": [
     "Set MeshObject.Object to skeleton model",
-    "Configure CharacterAnimationComponent with animation graph",
+    "Configure SCR_CharacterAnimationComponent AnimGraph/AnimInstance only if replacing the player graph",
     "Set up inventory and equipment slots",
     "Define stamina, health, and damage properties",
     "Configure AI behavior if NPC (faction, rank, skills)",
@@ -31,11 +31,11 @@
     {
       "name": "soldier",
       "description": "Military personnel with faction, rank, and combat loadout",
-      "defaultParent": "Prefabs/Characters/Core/Soldier_Base.et",
+      "defaultParent": "Prefabs/Characters/Factions/BLUFOR/US_Army/Character_US_Base.et",
       "subdirectory": "Prefabs/Characters/Soldiers",
       "postCreateNotes": [
         "Set model to military soldier rig",
-        "Configure faction and rank in SCR_CharacterRank",
+        "For another faction inherit Character_USSR_Base (OPFOR/USSR_Army) or Character_FIA_Base (INDFOR/FIA); faction is SCR_CharacterFactionAffiliationComponent.m_sFaction, rank is SCR_CharacterRankComponent",
         "Set up default loadout (weapon, armor, equipment)",
         "Configure AI skill level (0.5-1.0 for difficulty)",
         "Define voice lines if needed"
@@ -44,7 +44,7 @@
     {
       "name": "civilian",
       "description": "Non-combatant civilians and support personnel",
-      "defaultParent": "Prefabs/Characters/Core/Civilian_Base.et",
+      "defaultParent": "Prefabs/Characters/Factions/CIV/GenericCivilians/Character_CIV_Generic_Base.et",
       "subdirectory": "Prefabs/Characters/Civilians",
       "postCreateNotes": [
         "Set model to civilian rig",

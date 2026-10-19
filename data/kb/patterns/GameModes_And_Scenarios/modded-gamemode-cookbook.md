@@ -200,7 +200,8 @@ modded class SCR_CampaignMilitaryBaseManager
         GetBasesAtRange(proposedPos, radioRange, enemyBases, enemyFaction);
         foreach (SCR_CampaignMilitaryBaseComponent enemyBase : enemyBases)
         {
-            if (enemyBase.IsHQRadioTrafficPossible(enemyFaction) != SCR_ERadioCoverageStatus.NONE)
+            // IsHQRadioTrafficPossible returns bool and takes an SCR_CampaignFaction
+            if (enemyBase.IsHQRadioTrafficPossible(SCR_CampaignFaction.Cast(enemyFaction)))
                 return false; // Too close to enemy radio
         }
         return super.CanFactionBuildNewBase(faction);
@@ -265,14 +266,36 @@ modded class SCR_GameModeCampaign
             GetGame().GetCallqueue().CallLater(LoadLatestSave, 3000, false);
     }
 
+    // 1.8 persistence API: SaveGameManager / SaveGame (SCR_SaveGameManager no longer exists).
+    // GetSaves is async — keep a ref to the callback until it fires.
+    protected ref SaveGameObtainCallback m_AutoLoadSavesCallback;
+
     protected void LoadLatestSave()
     {
-        SCR_SaveGameManager saveMgr = SCR_SaveGameManager.GetInstance();
-        if (!saveMgr) return;
-        array<string> saves = {};
-        saveMgr.GetAvailableSaves(saves);
-        if (!saves.IsEmpty())
-            saveMgr.Load(saves[saves.Count() - 1]);
+        SaveGameManager saveMgr = SaveGameManager.Get();
+        if (!saveMgr || saveMgr.GetActiveSave())
+            return; // already resumed from a save
+
+        m_AutoLoadSavesCallback = new SaveGameObtainCallback(OnAutoLoadSavesObtained);
+        saveMgr.GetSaves(SaveGameManager.GetCurrentMissionResource(), m_AutoLoadSavesCallback);
+    }
+
+    protected void OnAutoLoadSavesObtained(bool success, array<SaveGame> saves, Managed context = null)
+    {
+        if (!success || !saves || saves.IsEmpty())
+            return;
+
+        SaveGame latest;
+        foreach (SaveGame save : saves)
+        {
+            if (!save.IsSavePointGameVersionCompatible() || !save.AreSavePointAddonsCompatible())
+                continue;
+            if (!latest || save.GetSavePointCreatedUnix() > latest.GetSavePointCreatedUnix())
+                latest = save;
+        }
+
+        if (latest)
+            SaveGameManager.Get().Load(latest);
     }
 }
 ```
@@ -286,21 +309,37 @@ Gate spawning with custom conditions (radio coverage, rank, supplies).
 ```c
 modded class SCR_GameModeCampaign
 {
-    override bool CanPlayerSpawn_S(int playerId)
+    // 1.8 signature — spawn requests carry SCR_SpawnData, not a player id
+    override bool CanPlayerSpawn_S(SCR_SpawnRequestComponent requestComponent, SCR_SpawnHandlerComponent handlerComponent, SCR_SpawnData data, out SCR_ESpawnResult result = SCR_ESpawnResult.SPAWN_NOT_ALLOWED)
     {
-        if (!super.CanPlayerSpawn_S(playerId)) return false;
+        if (!super.CanPlayerSpawn_S(requestComponent, handlerComponent, data, result))
+            return false;
 
-        // Radio coverage check
-        SCR_CampaignMilitaryBaseComponent base = GetSelectedBase(playerId);
-        if (base)
+        SCR_SpawnPointSpawnData spawnPointData = SCR_SpawnPointSpawnData.Cast(data);
+        if (!spawnPointData || !spawnPointData.GetSpawnPoint())
+            return true;
+
+        IEntity baseEntity = spawnPointData.GetSpawnPoint().GetParent();
+        if (!baseEntity)
+            return true;
+
+        SCR_CampaignMilitaryBaseComponent base = SCR_CampaignMilitaryBaseComponent.Cast(baseEntity.FindComponent(SCR_CampaignMilitaryBaseComponent));
+        if (!base)
+            return true;
+
+        // Radio coverage check (returns bool, takes the campaign faction)
+        SCR_CampaignFaction faction = SCR_CampaignFaction.Cast(SCR_FactionManager.SGetPlayerFaction(requestComponent.GetPlayerId()));
+        if (faction && !base.IsHQRadioTrafficPossible(faction))
         {
-            Faction faction = GetPlayerFaction(playerId);
-            if (base.IsHQRadioTrafficPossible(faction) == SCR_ERadioCoverageStatus.NONE)
-                return false;
+            result = SCR_ESpawnResult.SPAWN_NOT_ALLOWED;
+            return false;
+        }
 
-            // Supply check
-            if (base.GetSupplyLimit() > 0 && base.GetScarcityLevel() <= 0)
-                return false;
+        // Supply check
+        if (base.GetSupplyLimit() > 0 && base.GetScarcityLevel() <= 0)
+        {
+            result = SCR_ESpawnResult.SPAWN_NOT_ALLOWED;
+            return false;
         }
 
         return true;
