@@ -9,6 +9,7 @@ export function formatConnectionStatus(client: WorkbenchClient): string {
   if (!connected) return "\n\n---\n`Workbench: disconnected`";
   if (mode === "play") return "\n\n---\n`Workbench: play mode`";
   if (mode === "edit") return "\n\n---\n`Workbench: edit mode`";
+  if (mode === "no_world") return "\n\n---\n`Workbench: no world open`";
   return "\n\n---\n`Workbench: connected (mode unknown)`";
 }
 
@@ -19,6 +20,9 @@ export function formatConnectionStatus(client: WorkbenchClient): string {
  * the mode before running mutating operations.
  */
 export function requireEditMode(client: WorkbenchClient, toolAction: string): string | null {
+  if (client.state.mode === "no_world") {
+    return `Cannot ${toolAction}: no world is open in the World Editor. Open one first (wb_open_resource with a .ent world).`;
+  }
   if (client.state.mode === "play") {
     return `Cannot ${toolAction} while in play mode. Call \`wb_stop\` first to return to edit mode.`;
   }

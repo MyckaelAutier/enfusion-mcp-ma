@@ -76,6 +76,14 @@ class EMCP_WB_GetState : NetApiHandler
 		}
 
 		WorldEditorAPI api = worldEditor.GetApi();
+		if (!api && (!GetGame() || !GetGame().GetWorld()))
+		{
+			resp.status = "ok";
+			resp.mode = "no_world";
+			resp.message = "No world open in the World Editor";
+			return resp;
+		}
+
 		if (!api)
 		{
 			resp.status = "ok";

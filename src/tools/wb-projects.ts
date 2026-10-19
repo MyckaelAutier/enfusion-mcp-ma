@@ -80,11 +80,8 @@ export function registerWbProjects(server: McpServer, client: WorkbenchClient): 
         // list
         const result = await client.call<Record<string, unknown>>("GetLoadedProjects");
 
-        const projects = Array.isArray(result.projects)
-          ? result.projects
-          : Array.isArray(result.addons)
-            ? result.addons
-            : [];
+        // Workbench 1.8 answers {"Loaded Projects": ["ArmaReforger", "MyMod"]}
+        const projects = [result["Loaded Projects"], result.projects, result.addons].find(Array.isArray) ?? [];
 
         if (projects.length === 0) {
           return {

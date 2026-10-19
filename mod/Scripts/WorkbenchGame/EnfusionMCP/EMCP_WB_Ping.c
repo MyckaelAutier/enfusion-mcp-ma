@@ -54,6 +54,13 @@ class EMCP_WB_Ping : NetApiHandler
 			resp.mode = "edit";
 			resp.message = "EnfusionMCP Workbench bridge active";
 		}
+		else if (!GetGame() || !GetGame().GetWorld())
+		{
+			// No WorldEditorAPI and no running game world: nothing is open yet
+			resp.status = "ok";
+			resp.mode = "no_world";
+			resp.message = "EnfusionMCP Workbench bridge active (no world open)";
+		}
 		else
 		{
 			resp.status = "ok";

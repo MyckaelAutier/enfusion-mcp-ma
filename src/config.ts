@@ -27,13 +27,27 @@ export interface Config {
    *  Automatically set at runtime when wb_launch opens a .gproj file.
    *  Can also be set via ENFUSION_DEFAULT_MOD env var as a static fallback. */
   defaultMod?: string;
+  /** Arma Reforger Dedicated Server install dir (contains ArmaReforgerServer.exe). */
+  serverPath: string;
+  /** Directory holding steamcmd.exe (downloaded on demand by `server install`). */
+  steamcmdPath: string;
+  /** Server profile dir (saves, logs, downloaded workshop mods). */
+  serverProfilePath: string;
+  /** Where `mod build` writes packed addons (each in <dir>/<AddonName>). */
+  packedPath: string;
 }
 
 const DEFAULT_WORKBENCH_PATH =
   "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Arma Reforger Tools";
 
+const MCP_HOME = join(homedir(), ".enfusion-mcp");
+
 const DEFAULTS: Config = {
   workbenchPath: DEFAULT_WORKBENCH_PATH,
+  serverPath: join(MCP_HOME, "server"),
+  steamcmdPath: join(MCP_HOME, "steamcmd"),
+  serverProfilePath: join(MCP_HOME, "server-profile"),
+  packedPath: join(homedir(), "Documents", "My Games", "ArmaReforgerWorkbench", "packed"),
   projectPath: join(homedir(), "Documents", "My Games", "ArmaReforgerWorkbench", "addons"),
   gamePath: resolve(DEFAULT_WORKBENCH_PATH, "..", "Arma Reforger"),
   dataDir: resolve(
@@ -109,6 +123,10 @@ export function loadConfig(): Config {
       config.workbenchPort = port;
     }
   }
+  if (process.env.ENFUSION_SERVER_PATH) config.serverPath = process.env.ENFUSION_SERVER_PATH;
+  if (process.env.ENFUSION_STEAMCMD_PATH) config.steamcmdPath = process.env.ENFUSION_STEAMCMD_PATH;
+  if (process.env.ENFUSION_SERVER_PROFILE) config.serverProfilePath = process.env.ENFUSION_SERVER_PROFILE;
+  if (process.env.ENFUSION_PACKED_PATH) config.packedPath = process.env.ENFUSION_PACKED_PATH;
   if (process.env.ENFUSION_DEFAULT_MOD) {
     config.defaultMod = process.env.ENFUSION_DEFAULT_MOD;
   }

@@ -122,12 +122,20 @@ class EMCP_WB_EditorControl : NetApiHandler
 			}
 			else
 			{
-				bool opened = worldEditor.SetOpenedResource(req.path);
-				resp.status = "ok";
+				// Workbench.OpenResource picks the right editor (.c -> Script Editor, .et -> Prefab, .ent -> World)
+				bool opened = Workbench.OpenResource(req.path);
+				if (!opened)
+					opened = worldEditor.SetOpenedResource(req.path);
 				if (opened)
+				{
+					resp.status = "ok";
 					resp.message = "Opened resource: " + req.path;
+				}
 				else
-					resp.message = "SetOpenedResource returned false for: " + req.path;
+				{
+					resp.status = "error";
+					resp.message = "Workbench could not open: " + req.path + " (use a path relative to an addon, e.g. Scripts/Game/X.c, or a {GUID}path)";
+				}
 			}
 		}
 		else

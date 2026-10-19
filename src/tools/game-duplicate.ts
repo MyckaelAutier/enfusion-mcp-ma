@@ -12,6 +12,8 @@ import type { WorkbenchClient } from "../workbench/client.js";
 import { validateProjectPath } from "../utils/safe-path.js";
 import { resolveGameDataPath, findLooseFile, resolveAddonDir } from "../utils/game-paths.js";
 import { generateGuid } from "../formats/guid.js";
+import { PakVirtualFS } from "../pak/vfs.js";
+import { findPids } from "../utils/process.js";
 import {
   walkChain,
   mergeAncestryComponents,
@@ -97,7 +99,17 @@ export function registerGameDuplicate(
         if (sourceFile) sourceLabel = "(pak loose files)";
       }
 
+      // The shipped game is packed: fall back to the .pak archives (the usual case)
+      let pakContent: string | null = null;
       if (!sourceFile) {
+        const vfs = PakVirtualFS.get(config.gamePath);
+        if (vfs?.exists(bareSourcePath)) {
+          pakContent = vfs.readTextFile(bareSourcePath);
+          sourceLabel = "(.pak archives)";
+        }
+      }
+
+      if (!sourceFile && pakContent === null) {
         return {
           content: [
             {
@@ -151,7 +163,7 @@ export function registerGameDuplicate(
       // Read source content
       let rawContent: string;
       try {
-        rawContent = readFileSync(sourceFile, "utf-8");
+        rawContent = pakContent ?? readFileSync(sourceFile!, "utf-8");
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return {
@@ -264,8 +276,9 @@ export function registerGameDuplicate(
         };
       }
 
-      // Register with Workbench to assign a new GUID (if requested)
-      if (register) {
+      // Register with Workbench to assign a new GUID (if requested and Workbench is open);
+      // otherwise write the .meta ourselves so the copy has a GUID right away.
+      if (register && findPids("ArmaReforgerWorkbenchSteamDiag.exe").length > 0) {
         try {
           // The copy has already succeeded by this point — registration is a bonus
           // step, so its failure is reported as a warning rather than failing the
@@ -287,7 +300,7 @@ export function registerGameDuplicate(
                 text: [
                   `**Prefab duplicated successfully**`,
                   `- Source: ${sourcePath}`,
-                  `- Copied from: ${sourceFile} ${sourceLabel}`,
+                  `- Copied from: ${sourceFile ?? bareSourcePath} ${sourceLabel}`,
                   `- Saved to: ${absDestPath}`,
                   ``,
                   guidNote,
@@ -320,16 +333,18 @@ export function registerGameDuplicate(
         }
       }
 
+      const relDest = destPath.replace(/\\/g, "/").replace(/^\/+/, "");
+      const resourceGuid = generateGuid();
+      writeFileSync(absDestPath + ".meta", `MetaFileClass {\n Name "{${resourceGuid}}${relDest}"\n}\n`, "utf-8");
       return {
         content: [
           {
             type: "text",
             text: [
-              `**Prefab copied (not registered)**`,
-              `- Source: ${sourcePath}`,
-              `- Saved to: ${absDestPath}`,
-              ``,
-              `To assign a GUID: call again with register=true, or register manually in Workbench.`,
+              `**Copied with a new GUID**`,
+              `- Source: ${sourcePath} ${sourceLabel}`,
+              `- Saved to: ${absDestPath} (+ .meta)`,
+              `- Reference it as: \`{${resourceGuid}}${relDest}\``,
             ].join("\n") + ancestryNote,
           },
         ],

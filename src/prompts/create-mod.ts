@@ -134,20 +134,27 @@ This applies to ALL physical in-game objects: interactive props, spawn points wi
 
 6. Use **config_create** for config files (factions, mission headers, entity catalogs).
 
-7. Use **server_config** for a test server configuration if this is a multiplayer mod.
+7. Server-side tuning (XP, rank thresholds, arsenal/loadout supply costs, AI limits…): use **economy** for the common
+   values and **config_override** for any other base-game config/prefab value. Both write proper override files
+   (same path + .meta with the base GUID) — never copy a whole base config by hand.
 
 8. Use **mod** (action='validate') to check for structural issues.
 
-9. **Workbench Setup** (MANDATORY — do not skip, do not tell the user to do this):
-   a. **wb_launch** with \`gprojPath\` set to the addon's .gproj file — this copies handler scripts into the mod, skips the launcher, and opens the project in the World Editor with full NET API access
-   b. **wb_play** — This compiles ALL scripts (including the handler scripts) and enters game mode. This is the FIRST compilation step and MUST happen before wb_reload will work.
-   c. **wb_stop** — Return to the World Editor after verifying the game launched successfully
-   d. If compilation failed (errors in the Workbench console), fix with **project** (action='write'), then use **wb_reload** (target: "scripts") to recompile, and try **wb_play** again
-   e. **wb_resources** (action: "register") — Register every new prefab, config, and layout file
+9. **Compile** (MANDATORY): **mod** (action='compile'). It runs Workbench headless and lists script errors as
+   \`file:line message\`. Fix them with **project** (action='write') and compile again until it reports OK.
+   If Workbench is open, close it first with **wb_close** (two Workbench instances on one addon can crash).
 
-10. **wb_play** again if needed for further testing. Use **wb_stop** to return to editor.
+10. Optional in-editor work (placing entities, worlds, live inspection): **wb_launch** with \`gprojPath\`, then the
+    wb_* tools; **wb_resources** (action "register") for files that need a GUID; **wb_close** when done and
+    **wb_cleanup** to remove the handler scripts (NEVER skip before publishing).
 
-11. **wb_cleanup** with the addon's root directory path — Remove the temporary handler scripts before the user publishes. NEVER skip this step.
+11. **Build**: **mod** (action='build') → packed addon (data.pak + .gproj + resourceDatabase.rdb).
+
+12. **Test it running**:
+    - Single player / client-side: **game** (action 'launch', addons [name]) then **game** 'logs' (errorsOnly) and 'stop'.
+    - Multiplayer / server mods: **server** 'status' (→ 'install' once if missing), 'config' (pick a scenario with
+      'scenarios'), 'start' with addons [name], check 'logs' (errorsOnly), join with **game** 'launch' connect
+      127.0.0.1 and the same addons, then 'stop' both.
 
 ## STEP 2: SUMMARIZE
 

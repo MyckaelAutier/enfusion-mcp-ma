@@ -5,6 +5,7 @@ import { existsSync, readdirSync } from "node:fs";
 import type { Config } from "../config.js";
 import type { WorkbenchClient } from "../workbench/client.js";
 import { formatConnectionStatus } from "../workbench/status.js";
+import { findPids, killPids, sleep } from "../utils/process.js";
 
 export function registerWbLaunch(
   server: McpServer,
@@ -79,6 +80,56 @@ export function registerWbLaunch(
           isError: true,
         };
       }
+    }
+  );
+
+  server.registerTool(
+    "wb_close",
+    {
+      description:
+        "Close Arma Reforger Workbench. By default saves the open world first and exits cleanly through the " +
+        "NET API; if Workbench does not answer it is asked to close, and with force=true it is killed. " +
+        "Close Workbench before `mod compile/pack/build` on the same addon (two instances on one project can crash the GUI one).",
+      inputSchema: {
+        save: z.boolean().default(true).describe("Save the open world before exiting (default true)"),
+        force: z.boolean().default(false).describe("Kill the process if it does not exit on its own (unsaved work is lost)"),
+      },
+    },
+    async ({ save, force }) => {
+      const image = "ArmaReforgerWorkbenchSteamDiag.exe";
+      if (findPids(image).length === 0) {
+        return { content: [{ type: "text" as const, text: "Workbench is not running." }] };
+      }
+      const notes: string[] = [];
+      try {
+        const r = await client.call<Record<string, unknown>>("EMCP_WB_Exit", { save }, { skipAutoLaunch: true, timeout: 20_000 });
+        notes.push(save ? (r.saved ? "World saved." : "Nothing saved (no world open or save refused).") : "Closed without saving.");
+      } catch (e) {
+        notes.push(`NET API exit failed (${e instanceof Error ? e.message : String(e)}).`);
+        killPids(findPids(image)); // polite WM_CLOSE
+      }
+      for (let i = 0; i < 10 && findPids(image).length; i++) await sleep(500);
+      if (findPids(image).length) {
+        // The scripted exit runs on the game call queue, which does not tick while no
+        // world is open — fall back to asking the window to close.
+        killPids(findPids(image));
+        for (let i = 0; i < 20 && findPids(image).length; i++) await sleep(500);
+      }
+      if (findPids(image).length && force) {
+        killPids(findPids(image), true);
+        await sleep(1000);
+        notes.push("Process killed (force).");
+      }
+      const still = findPids(image).length > 0;
+      return {
+        content: [{
+          type: "text" as const,
+          text: still
+            ? `**Workbench is still running** — it may be showing a dialog. ${notes.join(" ")} Retry with force=true to kill it.`
+            : `**Workbench closed.** ${notes.join(" ")}`,
+        }],
+        ...(still ? { isError: true as const } : {}),
+      };
     }
   );
 

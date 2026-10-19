@@ -5,6 +5,7 @@ import { join, extname, relative } from "node:path";
 import type { Config } from "../config.js";
 import { logger } from "../utils/logger.js";
 import { PakVirtualFS } from "../pak/vfs.js";
+import { gameGuidMap } from "../pak/rdb.js";
 import { resolveGameDataPath } from "../utils/game-paths.js";
 
 interface AssetEntry {
@@ -34,50 +35,13 @@ let cachedBasePath: string | null = null;
 let cachedGuidDiag = "";
 
 /**
- * Parse entity catalog .conf files to build a map of normalized prefab path → GUID.
- * Scans loose files under basePath (e.g. addons/data/DataXXX/Configs/EntityCatalog/).
- * Entity catalogs contain lines like:
- *   m_sEntityPrefab "{657590C1EC9E27D3}Prefabs/Groups/OPFOR/Group_USSR_LightFireTeam.et"
+ * Resource path -> GUID for every base-game resource, from the addons' resourceDatabase.rdb
+ * (previously only prefabs referenced by loose entity catalogs, which the packed game does not have).
  */
-function buildGuidIndex(basePath: string): { guidMap: Map<string, string>; diag: string } {
+function buildGuidIndex(gamePath: string): { guidMap: Map<string, string>; diag: string } {
   const guidMap = new Map<string, string>();
-  const GUID_PATTERN = /\{([0-9A-Fa-f]{16})\}([^\s"]+\.et)/g;
-
-  let catalogCount = 0;
-
-  function walkCatalogs(dir: string): void {
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walkCatalogs(fullPath);
-      } else if (entry.name.toLowerCase().endsWith(".conf") &&
-                 dir.toLowerCase().includes("entitycatalog")) {
-        catalogCount++;
-        try {
-          const content = readFileSync(fullPath, "utf-8");
-          let match: RegExpExecArray | null;
-          GUID_PATTERN.lastIndex = 0;
-          while ((match = GUID_PATTERN.exec(content)) !== null) {
-            const guid = match[1].toUpperCase();
-            const prefabPath = match[2].replace(/\\/g, "/");
-            guidMap.set(prefabPath.toLowerCase(), guid);
-          }
-        } catch (e) {
-          logger.warn(`GUID index: failed to read catalog ${fullPath}: ${e}`);
-        }
-      }
-    }
-  }
-
-  walkCatalogs(basePath);
-
-  const diag = `${guidMap.size} GUIDs from ${catalogCount} catalogs (loose files)`;
+  for (const [k, e] of gameGuidMap(gamePath)) guidMap.set(k, e.guid);
+  const diag = `${guidMap.size} GUIDs from resourceDatabase.rdb`;
   logger.info(`GUID index built: ${diag}`);
   return { guidMap, diag };
 }
@@ -118,7 +82,7 @@ function buildIndex(basePath: string, gamePath: string): AssetEntry[] {
   // 2. Build GUID index from loose entity catalog files
   let guidMap: Map<string, string> | null = null;
   try {
-    const { guidMap: gm, diag } = buildGuidIndex(basePath);
+    const { guidMap: gm, diag } = buildGuidIndex(gamePath);
     guidMap = gm;
     cachedGuidDiag = diag;
   } catch (e) {
@@ -146,21 +110,16 @@ function buildIndex(basePath: string, gamePath: string): AssetEntry[] {
   // 4. Attach GUIDs to prefab entries
   if (guidMap && guidMap.size > 0) {
     for (const entry of entries) {
-      if (entry.ext !== "et") continue;
+      // every resource type has a GUID (prefabs, configs, layouts, models, textures…)
       // VFS paths include the DataXXX prefix, catalog paths don't — try stripping it
       const pathLower = entry.path.toLowerCase();
       if (guidMap.has(pathLower)) {
         entry.guid = guidMap.get(pathLower);
         continue;
       }
-      // Strip leading DataXXX/ segment (e.g., "data005/prefabs/..." → "prefabs/...")
-      const slashIdx = pathLower.indexOf("/");
-      if (slashIdx !== -1) {
-        const stripped = pathLower.slice(slashIdx + 1);
-        if (guidMap.has(stripped)) {
-          entry.guid = guidMap.get(stripped);
-        }
-      }
+      // Strip a leading DataXXX/ segment of loose files (e.g., "data005/prefabs/..." → "prefabs/...")
+      const stripped = pathLower.replace(/^data\d*\//, "");
+      if (guidMap.has(stripped)) entry.guid = guidMap.get(stripped);
     }
   }
 
@@ -284,9 +243,8 @@ export function registerAssetSearch(server: McpServer, config: Config): void {
 
         for (const { entry } of shown) {
           if (entry.guid) {
-            // Strip DataXXX/ prefix from display path to match the catalog's relative path
-            const slashIdx = entry.path.indexOf("/");
-            const displayPath = slashIdx !== -1 ? entry.path.slice(slashIdx + 1) : entry.path;
+            // Loose files may sit under a DataXXX/ folder; pak paths are already resource paths
+            const displayPath = entry.path.replace(/^data\d*\//i, "");
             lines.push(`  {${entry.guid}}${displayPath}`);
           } else {
             lines.push(`  ${entry.path}`);

@@ -24,9 +24,13 @@ export function registerWbExecuteAction(server: McpServer, client: WorkbenchClie
           .describe(
             "Comma-separated menu path (e.g., 'Tools,Reload Scripts', 'File,Save', 'Edit,Undo')"
           ),
+        module: z
+          .enum(["WorldEditor", "ScriptEditor", "ResourceManager", "AnimEditor", "ParticleEditor", "BehaviorEditor", "AudioEditor", "LocalizationEditor"])
+          .default("WorldEditor")
+          .describe("Workbench module whose menu holds the action (default WorldEditor)"),
       },
     },
-    async ({ menuPath }) => {
+    async ({ menuPath, module }) => {
       try {
         // Block known-destructive menu paths
         const normalizedPath = menuPath.trim();
@@ -48,7 +52,14 @@ export function registerWbExecuteAction(server: McpServer, client: WorkbenchClie
         }
         const result = await client.call<Record<string, unknown>>("EMCP_WB_ExecuteAction", {
           menuPath,
+          module,
         });
+        if (!result.executed) {
+          return {
+            content: [{ type: "text" as const, text: `**Action not executed** — ${module} has no enabled menu item "${menuPath}".${formatConnectionStatus(client)}` }],
+            isError: true,
+          };
+        }
 
         return {
           content: [

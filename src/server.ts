@@ -15,6 +15,7 @@ import { registerMenuCreate } from "./tools/menu-create.js";
 import { registerGamemodeScaffold } from "./tools/gamemode-scaffold.js";
 import { registerCreateModPrompt } from "./prompts/create-mod.js";
 import { registerModifyModPrompt } from "./prompts/modify-mod.js";
+import { registerServerModPrompt } from "./prompts/server-mod.js";
 import { registerClassResource } from "./resources/class-resource.js";
 import { registerPatternResource } from "./resources/pattern-resource.js";
 import { registerGroupResource } from "./resources/group-resource.js";
@@ -51,6 +52,11 @@ import { registerScenarioCreate } from "./tools/scenario-create.js";
 import { registerAnimationGraph } from "./tools/animation-graph.js";
 import { registerWbKnowledge } from "./tools/wb-knowledge.js";
 import { registerBuildingSetup } from "./tools/building-setup.js";
+import { registerConfigOverride } from "./tools/config-override.js";
+import { registerEconomy } from "./tools/economy.js";
+import { registerServer } from "./tools/server.js";
+import { registerGame } from "./tools/game.js";
+import { registerEnvCheck } from "./tools/env-check.js";
 import type { Config } from "./config.js";
 
 export function registerTools(server: McpServer, config: Config): void {
@@ -115,10 +121,16 @@ export function registerTools(server: McpServer, config: Config): void {
   registerAnimationGraph(server, config);
   registerWbKnowledge(server);
   registerBuildingSetup(server, config);
+  registerConfigOverride(server, config);
+  registerEconomy(server, config);
+  registerServer(server, config);
+  registerGame(server, config);
+  registerEnvCheck(server, config, wbClient);
 
   // MCP Prompts
   registerCreateModPrompt(server, patterns);
   registerModifyModPrompt(server);
+  registerServerModPrompt(server);
 
   // MCP Resources
   registerClassResource(server, searchEngine);

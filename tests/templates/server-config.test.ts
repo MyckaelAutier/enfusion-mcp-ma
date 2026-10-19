@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateServerConfig } from "../../src/templates/server-config.js";
+import { generateServerConfig, validateAgainstSchema } from "../../src/templates/server-config.js";
 
 describe("generateServerConfig", () => {
   it("returns valid JSON", () => {
@@ -19,7 +19,7 @@ describe("generateServerConfig", () => {
     const result = JSON.parse(
       generateServerConfig({ name: "Test" })
     );
-    expect(result.gameHostBindPort).toBe(2001);
+    expect(result.bindPort).toBe(2001);
   });
 
   it("defaults maxPlayers to 32", () => {
@@ -40,8 +40,8 @@ describe("generateServerConfig", () => {
     const result = JSON.parse(
       generateServerConfig({ name: "Test", port: 3000 })
     );
-    expect(result.gameHostBindPort).toBe(3000);
-    expect(result.gameHostRegisterPort).toBe(3000);
+    expect(result.bindPort).toBe(3000);
+    expect(result.publicPort).toBe(3000);
   });
 
   it("uses custom maxPlayers", () => {
@@ -96,5 +96,40 @@ describe("generateServerConfig", () => {
       generateServerConfig({ name: "Test", a2sPort: 18888 })
     );
     expect(result.a2s.port).toBe(18888);
+  });
+});
+
+describe("server.json follows the 1.8 schema", () => {
+  it("uses bindAddress/bindPort/publicPort, not the removed gameHost* keys", () => {
+    const cfg = JSON.parse(generateServerConfig({ name: "T" }));
+    expect(Object.keys(cfg)).not.toContain("gameHostBindPort");
+    expect(cfg).toMatchObject({ bindAddress: "0.0.0.0", bindPort: 2001, publicPort: 2001, a2s: { port: 17777 } });
+  });
+
+  it("adds rcon only with a password, and lists workshop mods", () => {
+    expect(JSON.parse(generateServerConfig({ name: "T" })).rcon).toBeUndefined();
+    const cfg = JSON.parse(generateServerConfig({ name: "T", rconPassword: "pw", mods: [{ modId: "5F2944B7474F043F", name: "X" }] }));
+    expect(cfg.rcon).toMatchObject({ password: "pw", permission: "admin" });
+    expect(cfg.game.mods).toEqual([{ modId: "5F2944B7474F043F", name: "X" }]);
+  });
+});
+
+describe("validateAgainstSchema", () => {
+  const schema = {
+    type: "object", required: ["game"], additionalProperties: false,
+    properties: {
+      bindPort: { type: "integer", minimum: 1, maximum: 65535 },
+      game: { type: "object", additionalProperties: false, properties: {
+        scenarioId: { type: "string", pattern: "^\\{[0-9A-F]{16}\\}[a-zA-Z0-9_./ -]+$", patternDesc: "Param must start with ResourceGUID" },
+      } },
+    },
+  };
+  it("accepts a valid document", () => {
+    expect(validateAgainstSchema({ bindPort: 2001, game: { scenarioId: "{ECC61978EDCC2B5A}Missions/23_Campaign.conf" } }, schema)).toEqual([]);
+  });
+  it("reports unknown keys, missing required, bad types and patterns", () => {
+    const errs = validateAgainstSchema({ gameHostBindPort: 1, bindPort: "x" }, schema);
+    expect(errs).toEqual(expect.arrayContaining(["$.game: required", "$.gameHostBindPort: unknown key", "$.bindPort: expected integer, got string"]));
+    expect(validateAgainstSchema({ game: { scenarioId: "Missions/x.conf" } }, schema)).toEqual(["$.game.scenarioId: Param must start with ResourceGUID"]);
   });
 });

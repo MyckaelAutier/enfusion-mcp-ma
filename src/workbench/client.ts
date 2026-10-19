@@ -34,7 +34,7 @@ const HANDLER_RECOMPILE_TIMEOUT_MS = 30_000;
 /** Interval between polls while waiting for handler script recompilation. */
 const HANDLER_RECOMPILE_POLL_MS = 2_000;
 
-export type WorkbenchMode = "edit" | "play" | "unknown";
+export type WorkbenchMode = "edit" | "play" | "no_world" | "unknown";
 
 export interface DiagnosticReport {
   host: string;
@@ -441,6 +441,8 @@ export class WorkbenchClient {
       } else if (mode === "play" || mode === "game") {
         // Scripts return "game" when in play mode (WorldEditorAPI unavailable)
         this._state.mode = "play";
+      } else if (mode === "no_world") {
+        this._state.mode = "no_world";
       }
       // "no_world_editor" and unrecognised values leave mode as-is (stays "unknown")
     }

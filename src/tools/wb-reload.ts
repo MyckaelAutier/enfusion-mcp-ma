@@ -19,6 +19,19 @@ export function registerWbReload(server: McpServer, client: WorkbenchClient): vo
     async ({ target }) => {
       try {
         const result = await client.call<Record<string, unknown>>("EMCP_WB_Reload", { target });
+        const msg = String(result.message ?? "");
+        // The handler tries known menu paths; "=false" means none of them existed.
+        if (/ExecuteAction=false/.test(msg)) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `**Reload not confirmed** — ${msg}\n\nWorkbench exposed no matching menu action. To check that scripts compile, ` +
+                `use \`mod\` with action "compile" (headless, reports errors with file:line); in the open Workbench, ` +
+                `recompile from the Script Editor.${formatConnectionStatus(client)}`,
+            }],
+            isError: true,
+          };
+        }
 
         return {
           content: [

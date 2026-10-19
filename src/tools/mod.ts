@@ -1,8 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { resolve, join, extname, relative } from "node:path";
-import { spawn } from "node:child_process";
+import { resolve, join, extname, relative, dirname, basename } from "node:path";
 import type { Config } from "../config.js";
 import { generateGproj } from "../templates/gproj.js";
 import { generateScript } from "../templates/script.js";
@@ -11,60 +10,8 @@ import { validateFilename, validateProjectPath } from "../utils/safe-path.js";
 import type { SearchEngine } from "../index/search-engine.js";
 import { parse, getProperty } from "../formats/enfusion-text.js";
 
-import { findWorkbenchExe } from "../utils/game-paths.js";
-
-// ─── build helpers ────────────────────────────────────────────────────────────
-
-const BUILD_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-function runBuild(
-  exePath: string,
-  args: string[],
-  timeoutMs: number
-): Promise<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean }> {
-  return new Promise((resolve) => {
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-
-    const proc = spawn(exePath, args, {
-      windowsHide: true,
-    });
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      proc.kill("SIGTERM");
-    }, timeoutMs);
-
-    proc.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({
-        exitCode: code ?? 1,
-        stdout,
-        stderr,
-        timedOut,
-      });
-    });
-
-    proc.on("error", (err) => {
-      clearTimeout(timer);
-      resolve({
-        exitCode: 1,
-        stdout,
-        stderr: stderr + `\nProcess error: ${err.message}`,
-        timedOut: false,
-      });
-    });
-  });
-}
+import { compileAddon, packAddon, readGproj, resolveGproj } from "../workbench/cli.js";
+import { findPids } from "../utils/process.js";
 
 // ─── create helpers ───────────────────────────────────────────────────────────
 
@@ -384,35 +331,34 @@ export function registerMod(
     "mod",
     {
       description:
-        "Manage Arma Reforger addons: build with the Workbench CLI, scaffold a new addon, or validate an existing addon without building.",
+        "Manage Arma Reforger addons with headless Workbench runs (Workbench does not need to be open): " +
+        "'compile' checks every script of the addon and lists errors with file:line; 'pack' produces the " +
+        "loadable addon (data.pak + .gproj + resourceDatabase.rdb) for the game / dedicated server; " +
+        "'build' = compile then pack (stops on script errors); 'create' scaffolds a new addon; " +
+        "'validate' runs static checks without Workbench.",
       inputSchema: {
         action: z
-          .enum(["build", "create", "validate"])
-          .describe("Action to perform: 'build' compiles the addon, 'create' scaffolds a new addon, 'validate' checks an existing addon."),
+          .enum(["build", "compile", "pack", "create", "validate"])
+          .describe("build = compile + pack, compile = script check only, pack = package only, create = scaffold, validate = static checks."),
 
-        // ── build params ──────────────────────────────────────────────────────
+        // ── build / compile / pack params ─────────────────────────────────────
         addonName: z
           .string()
           .min(1)
           .optional()
-          .describe("(build) Name of the addon to build (must match the .gproj ID)"),
-        platform: z
-          .enum(["PC", "PC_WB", "HEADLESS"])
-          .default("PC")
-          .optional()
-          .describe("(build) Target platform for the build"),
+          .describe("(build/compile/pack) Addon folder name under the project path. Defaults to the addon opened with wb_launch."),
         outputPath: z
           .string()
           .optional()
-          .describe("(build) Build output directory. Auto-generated if omitted."),
+          .describe("(build/pack) Output directory for the packed addon. Default: <packedPath>/<AddonID>."),
         gprojPath: z
           .string()
           .optional()
-          .describe("(build) Path to .gproj file. Auto-detected if omitted."),
-        filterPath: z
-          .string()
+          .describe("(build/compile/pack) Path to the .gproj instead of addonName."),
+        force: z
+          .boolean()
           .optional()
-          .describe("(build) Limit build to a single folder or file for faster iteration"),
+          .describe("(build/compile/pack) Run even while the Workbench GUI is open (it can crash when both work on the same addon)."),
 
         // ── create params ─────────────────────────────────────────────────────
         name: z
@@ -447,107 +393,75 @@ export function registerMod(
           .describe("(validate) Specific checks to run. Runs all checks if omitted."),
       },
     },
-    async ({ action, addonName, platform, outputPath, gprojPath, filterPath, name, description, prefix, pattern: patternName, projectPath, checks }) => {
+    async ({ action, addonName, outputPath, gprojPath, force, name, description, prefix, pattern: patternName, projectPath, checks }) => {
 
-      // ── build ──────────────────────────────────────────────────────────────
-      if (action === "build") {
-        if (!addonName) {
+      // ── build / compile / pack ─────────────────────────────────────────────
+      if (action === "build" || action === "compile" || action === "pack") {
+        const gproj = resolveGproj(config, addonName ?? config.defaultMod, gprojPath);
+        if (!gproj) {
           return {
-            content: [{ type: "text", text: "Missing required parameter for action 'build': addonName" }],
+            content: [{ type: "text", text: `Addon not found. Pass addonName (a folder under ${config.projectPath}) or gprojPath.` }],
             isError: true,
           };
         }
-
-        const exePath = findWorkbenchExe(config.workbenchPath);
-        if (!exePath) {
+        if (!force && findPids("ArmaReforgerWorkbenchSteamDiag.exe").length > 0) {
           return {
-            content: [
-              {
-                type: "text",
-                text: `Workbench not found at: ${config.workbenchPath}\n\nArmaReforgerWorkbenchSteamDiag.exe is required for building.\n\nInstall Arma Reforger Tools from Steam, or set ENFUSION_WORKBENCH_PATH to the correct path.\n\nNote: You need the Diag version (opt into "Profiling Build" beta in Steam).`,
-              },
-            ],
+            content: [{
+              type: "text",
+              text: "Workbench is open. A second (headless) Workbench on the same addon can crash the open one — " +
+                "close it with `wb_close` first, or pass force=true.",
+            }],
             isError: true,
           };
         }
-
-        const buildOutput =
-          outputPath ||
-          resolve(config.workbenchPath, "addons", addonName, "output");
-
-        const args: string[] = [
-          "-wbModule=ResourceManager",
-          `-buildData`,
-          platform ?? "PC",
-          buildOutput,
-          addonName,
-        ];
-
-        if (gprojPath) {
-          args.push(`-gproj`, gprojPath);
-        }
-
-        if (filterPath) {
-          args.push(`-filterPath`, filterPath);
-        }
+        const addonDir = dirname(gproj);
+        const project = readGproj(gproj);
+        const lines: string[] = [`## ${action === "compile" ? "Compile" : action === "pack" ? "Pack" : "Build"}: ${project.id || basename(addonDir)}`, ""];
 
         try {
-          const startTime = Date.now();
-          const result = await runBuild(exePath, args, BUILD_TIMEOUT_MS);
-          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          if (action !== "pack") {
+            const c = await compileAddon(config, gproj);
+            const own = c.errors.filter((e) => e.inAddon);
+            lines.push(`**Scripts:** ${c.ok ? "compiled OK" : "FAILED"} (${c.run.seconds}s${c.run.timedOut ? ", timed out" : ""})`);
+            if (own.length) {
+              lines.push("", "### Errors in this addon");
+              for (const e of own.slice(0, 50)) lines.push(`- \`${e.file}:${e.line}\` ${e.message}`);
+            }
+            const cascade = c.errors.length - own.length;
+            if (!c.ok && cascade > 0) {
+              lines.push("", `${cascade} more error(s) in base-game scripts — usually knock-on effects of the errors above` +
+                (own.length ? "." : " (or a `modded class` breaking vanilla code). First ones:"));
+              if (!own.length) for (const e of c.errors.slice(0, 15)) lines.push(`- \`${e.file}:${e.line}\` ${e.message}`);
+            }
+            if (c.warnings.length) {
+              lines.push("", "### Warnings in this addon");
+              for (const w of c.warnings.slice(0, 30)) lines.push(`- \`${w.file}:${w.line}\` ${w.message}`);
+            }
+            if (c.run.logDir) lines.push("", `Log: ${join(c.run.logDir, "console.log")}`);
+            if (!c.ok) return { content: [{ type: "text", text: lines.join("\n") }], isError: true };
+            if (action === "compile") return { content: [{ type: "text", text: lines.join("\n") }] };
+            lines.push("");
+          }
 
-          const lines: string[] = [];
-          lines.push(`## Build Result: ${addonName}`);
-          lines.push("");
-
-          if (result.timedOut) {
-            lines.push(`**Status:** TIMEOUT (exceeded ${BUILD_TIMEOUT_MS / 1000}s limit)`);
-            lines.push("The build process was killed. Try building a smaller scope with filterPath.");
-          } else if (result.exitCode === 0) {
-            lines.push("**Status:** SUCCESS");
-            lines.push(`**Build time:** ${elapsed}s`);
-            lines.push(`**Output:** ${buildOutput}`);
+          const outDir = outputPath || join(config.packedPath, project.id || basename(addonDir));
+          const p = await packAddon(config, gproj, outDir);
+          lines.push(`**Pack:** ${p.ok ? "OK" : "FAILED"} (${p.run.seconds}s) → \`${outDir}\``);
+          if (p.files.length) lines.push(`Files: ${p.files.join(", ")}`);
+          if (existsSync(join(addonDir, "Scripts", "WorkbenchGame", "EnfusionMCP"))) {
+            lines.push("", "⚠ The EnfusionMCP Workbench handler scripts are inside this addon and were packed with it. Run `wb_cleanup` before publishing.");
+          }
+          if (p.ok) {
+            lines.push(
+              "",
+              "Load it locally with `game launch` / `server start` (addonsDir = " + `\`${dirname(outDir)}\`, addon GUID \`${project.guid}\`).`
+            );
           } else {
-            lines.push(`**Status:** FAILED (exit code ${result.exitCode})`);
-            lines.push(`**Build time:** ${elapsed}s`);
+            for (const e of p.errors.slice(0, 20)) lines.push(`- ${e}`);
+            if (p.run.logDir) lines.push(`Log: ${join(p.run.logDir, "console.log")}`);
           }
-
-          lines.push("");
-          lines.push(`**Command:** ArmaReforgerWorkbenchSteamDiag.exe ${args.join(" ")}`);
-
-          if (result.stdout.trim()) {
-            lines.push("");
-            lines.push("### Output");
-            lines.push("```");
-            const stdoutLines = result.stdout.trim().split("\n");
-            const shown = stdoutLines.slice(-100);
-            if (stdoutLines.length > 100) {
-              lines.push(`... (${stdoutLines.length - 100} lines omitted)`);
-            }
-            lines.push(shown.join("\n"));
-            lines.push("```");
-          }
-
-          if (result.stderr.trim()) {
-            lines.push("");
-            lines.push("### Errors");
-            lines.push("```");
-            const stderrLines = result.stderr.trim().split("\n");
-            const shown = stderrLines.slice(-50);
-            if (stderrLines.length > 50) {
-              lines.push(`... (${stderrLines.length - 50} lines omitted)`);
-            }
-            lines.push(shown.join("\n"));
-            lines.push("```");
-          }
-
-          return { content: [{ type: "text", text: lines.join("\n") }] };
+          return { content: [{ type: "text", text: lines.join("\n") }], ...(p.ok ? {} : { isError: true }) };
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          return {
-            content: [{ type: "text", text: `Error running build: ${msg}` }],
-            isError: true,
-          };
+          return { content: [{ type: "text", text: `Error running Workbench: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
         }
       }
 
