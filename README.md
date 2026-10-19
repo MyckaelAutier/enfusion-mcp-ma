@@ -1,4 +1,4 @@
-# enfusion-mcp — édition MyckaelAutier
+# enfusion-mcp-ma
 
 Serveur **MCP** (Model Context Protocol) qui transforme Claude en atelier complet de modding **Arma Reforger** :
 il connaît l'API du jeu, lit directement les fichiers du jeu, crée les mods, **les compile et les package lui-même**,
@@ -104,23 +104,27 @@ Concrètement, Claude :
 
 ## Installation
 
-### 1. Récupérer et compiler
+Une seule commande, rien à cloner. Il faut juste **Node.js 20+**.
 
-```bash
-git clone https://github.com/MyckaelAutier/enfusion-mcp-BK.git
-cd enfusion-mcp-BK
-npm install        # installe et compile (dist/)
+### Option A : plugin Claude Code (recommandé)
+
+Dans Claude Code :
+
+```
+/plugin marketplace add MyckaelAutier/enfusion-mcp-ma
+/plugin install enfusion-mcp-ma@enfusion-mcp-ma
 ```
 
-### 2. Brancher sur Claude Code
+Le plugin installe le serveur MCP (depuis npm, toujours en dernière version) et une skill qui apprend à Claude le bon
+déroulé de travail Arma Reforger.
+
+### Option B : serveur MCP seul
 
 ```bash
-claude mcp add --scope user enfusion-mcp -- node "C:\chemin\vers\enfusion-mcp-BK\dist\index.js"
+claude mcp add --scope user enfusion-mcp -- cmd /c npx -y enfusion-mcp-ma@latest
 ```
 
-Redémarre Claude Code et vérifie avec `/mcp`.
-
-### 3. Ou sur Claude Desktop
+### Option C : Claude Desktop
 
 `%APPDATA%\Claude\claude_desktop_config.json` :
 
@@ -128,15 +132,21 @@ Redémarre Claude Code et vérifie avec `/mcp`.
 {
   "mcpServers": {
     "enfusion-mcp": {
-      "command": "node",
-      "args": ["C:\\chemin\\vers\\enfusion-mcp-BK\\dist\\index.js"]
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "enfusion-mcp-ma@latest"]
     }
   }
 }
 ```
 
-> Ne mélange pas avec l'ancien paquet npm (`npx -y enfusion-mcp`) : retire-le avec
-> `claude mcp remove enfusion-mcp --scope user` avant d'ajouter celui-ci.
+Dans tous les cas : redémarre Claude, puis vérifie avec `/mcp` que `enfusion-mcp` est connecté. Le tout premier
+démarrage télécharge le paquet (environ 6 Mo), les suivants sont instantanés.
+
+> Tu avais l'ancien paquet (`npx -y enfusion-mcp`, bloqué en 0.6.1) ? Retire-le d'abord :
+> `claude mcp remove enfusion-mcp --scope user`.
+
+**Mettre à jour** : avec `@latest`, le dernier paquet publié est pris à chaque démarrage. Pour le plugin :
+`/plugin marketplace update enfusion-mcp-ma`.
 
 ---
 
@@ -409,6 +419,8 @@ doc locale de Workbench.
 ## Développement
 
 ```bash
+git clone https://github.com/MyckaelAutier/enfusion-mcp-ma.git
+cd enfusion-mcp-ma
 npm install
 npm run dev             # serveur MCP depuis les sources (tsx)
 npm test                # 634 tests (vitest)
@@ -416,6 +428,7 @@ npm run build           # dist/
 npm run scrape          # régénère data/api
 npm run check:recipes   # recettes vs jeu installé
 npm run tuning-server   # interface web de réglage des moteurs de véhicules
+npm publish             # publie enfusion-mcp-ma sur npm (le build se lance tout seul)
 ```
 
 Arborescence :
@@ -430,6 +443,7 @@ src/
   templates/    générateurs (scripts, prefabs, layouts, server.json…)
   prompts/      /create-mod, /modify-mod, /server-mod
 mod/            handlers Enforce copiés dans Workbench
+plugin/         plugin Claude Code (.mcp.json + skill), publié via .claude-plugin/marketplace.json
 data/           API, wiki, KB, recettes, patterns
 tests/          vitest
 ```

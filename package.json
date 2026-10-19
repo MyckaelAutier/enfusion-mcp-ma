@@ -1,10 +1,10 @@
 {
-  "name": "enfusion-mcp",
+  "name": "enfusion-mcp-ma",
   "version": "0.13.0",
   "type": "module",
-  "description": "MCP server for Arma Reforger / Enfusion engine modding — create mods from natural language",
+  "description": "MCP server for Arma Reforger 1.8 modding: API + game data knowledge, headless compile/pack, game & dedicated server control, economy/config overrides",
   "bin": {
-    "enfusion-mcp": "./dist/index.js"
+    "enfusion-mcp-ma": "./dist/index.js"
   },
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
@@ -39,15 +39,16 @@
   "files": [
     "dist",
     "data",
+    "!data/wiki/export.xml",
     "mod",
     "README.md",
     "LICENSE"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/MyckaelAutier/enfusion-mcp-BK.git"
+    "url": "https://github.com/MyckaelAutier/enfusion-mcp-ma.git"
   },
-  "homepage": "https://github.com/MyckaelAutier/enfusion-mcp-BK",
+  "homepage": "https://github.com/MyckaelAutier/enfusion-mcp-ma",
   "license": "MIT",
   "keywords": [
     "mcp",
@@ -55,6 +56,8 @@
     "enfusion",
     "modding",
     "model-context-protocol",
-    "workbench"
+    "workbench",
+    "dedicated-server",
+    "claude"
   ]
 }
