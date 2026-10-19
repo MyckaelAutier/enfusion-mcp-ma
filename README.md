@@ -1,132 +1,131 @@
 # enfusion-mcp-ma
 
-Serveur **MCP** (Model Context Protocol) qui transforme Claude en atelier complet de modding **Arma Reforger** :
-il connaît l'API du jeu, lit directement les fichiers du jeu, crée les mods, **les compile et les package lui-même**,
-lance le **jeu** et un **serveur dédié** pour les tester, et sait régler l'**économie d'un serveur** (XP, rangs, coûts en
-supplies…) sans écrire une ligne de script.
+An **MCP** (Model Context Protocol) server that turns Claude into a complete **Arma Reforger** modding workshop.
+It knows the game's API, reads the game files directly, creates mods, **compiles and packs them itself**, starts
+the **game** and a **dedicated server** to test them, and can tune a **server's economy** (XP, ranks, supply
+costs…) without writing a single line of script.
 
-> Fork de [steffenbk/enfusion-mcp-BK](https://github.com/steffenbk/enfusion-mcp-BK), mis à jour pour **Arma Reforger 1.8**
-> et largement étendu (voir [Nouveautés du fork](#nouveautés-du-fork)).
+> Fork of [steffenbk/enfusion-mcp-BK](https://github.com/steffenbk/enfusion-mcp-BK), updated for **Arma Reforger 1.8**
+> and heavily extended (see [What's new in this fork](#whats-new-in-this-fork)).
 
 ---
 
-## Sommaire
+## Contents
 
-- [Ce que ça fait](#ce-que-ça-fait)
-- [Nouveautés du fork](#nouveautés-du-fork)
-- [Prérequis](#prérequis)
+- [What it does](#what-it-does)
+- [What's new in this fork](#whats-new-in-this-fork)
+- [Requirements](#requirements)
 - [Installation](#installation)
-- [Premiers pas](#premiers-pas)
-- [Créer un mod de A à Z](#créer-un-mod-de-a-à-z)
-- [Mods serveur : XP, rangs, coûts](#mods-serveur--xp-rangs-coûts)
-- [Serveur dédié local](#serveur-dédié-local)
-- [Référence des outils](#référence-des-outils)
-- [Prompts guidés](#prompts-guidés)
+- [Getting started](#getting-started)
+- [Building a mod from A to Z](#building-a-mod-from-a-to-z)
+- [Server mods: XP, ranks, costs](#server-mods-xp-ranks-costs)
+- [Local dedicated server](#local-dedicated-server)
+- [Tool reference](#tool-reference)
+- [Guided prompts](#guided-prompts)
 - [Configuration](#configuration)
-- [Données embarquées et mise à jour](#données-embarquées-et-mise-à-jour)
-- [Dépannage](#dépannage)
-- [Développement](#développement)
-- [Crédits et licence](#crédits-et-licence)
+- [Bundled data and updating it](#bundled-data-and-updating-it)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Credits and license](#credits-and-license)
 
 ---
 
-## Ce que ça fait
+## What it does
 
-Tu décris ce que tu veux, Claude s'occupe du reste :
+Describe what you want and Claude takes care of the rest:
 
-- *« Fais un mod serveur Conflict : XP doublée, les fusils coûtent 30 % de moins, la M249 demande le rang sergent. »*
-- *« Crée un HUD qui affiche la santé et l'endurance du joueur. »*
-- *« Mode de jeu survie avec vagues de zombies. »*
-- *« Une faction CSAT avec un camouflage désert. »*
-- *« Lance un serveur local sur Conflict Everon avec mon mod et connecte-moi dessus. »*
+- *"Make a Conflict server mod: double XP, rifles 30% cheaper, the M249 requires the sergeant rank."*
+- *"Create a HUD that shows the player's health and stamina."*
+- *"A survival game mode with zombie waves."*
+- *"A CSAT faction with desert camo."*
+- *"Start a local server on Conflict Everon with my mod and connect me to it."*
 
-Concrètement, Claude :
+In practice, Claude:
 
-1. **Cherche** dans l'API 1.8 (8 984 classes, méthodes, 251 enums globaux), la base de connaissances, le wiki BI et
-   les fichiers du jeu (lus directement dans les `.pak`, avec les GUID de toutes les ressources).
-2. **Génère** l'addon : `.gproj`, scripts Enforce, prefabs, configs, layouts UI, overrides.
-3. **Compile** les scripts avec Workbench en mode headless et corrige les erreurs (`fichier:ligne`).
-4. **Package** l'addon (`data.pak` + `.gproj` + `resourceDatabase.rdb`), le format chargé par le jeu et le serveur.
-5. **Teste** : lance le jeu avec le mod, ou installe et démarre un serveur dédié, puis lit les logs.
-6. Pilote **Workbench en direct** si besoin (entités, calques, prefabs, scénarios…) puis le ferme proprement.
-
----
-
-## Nouveautés du fork
-
-**Données mises à jour (1.8)**
-- Index API reconstruit sur la doc **1.8.0** de Workbench : 8 984 classes (contre 8 693), types de base
-  (`string`, `array`, `vector`, `map`…) inclus, **251 enums globaux** ajoutés, descriptions détaillées et fichier
-  source de chaque classe.
-- Corrigé : environ 20 % des noms de méthode étaient corrompus (`SourceToEntityIEntitySource`) et introuvables.
-- Méthodes « perdues » par Doxygen récupérées (ex. `WorldEditorAPI.DeleteEntity`, `LockEntityLayer`).
-- Scraper refait : doc locale de Workbench ou site BI (`npm run scrape` / `npm run scrape:remote`).
-
-**Nouveaux outils**
-- `mod` : `compile` (Workbench headless, erreurs `fichier:ligne`), `pack` et `build` = compile + pack.
-  L'ancien `build` restait bloqué indéfiniment.
-- `config_override` : override de n'importe quelle config ou prefab du jeu, comme « Override in addon » de Workbench,
-  mais sans Workbench.
-- `economy` : XP, seuils de rang, coûts arsenal, coûts de respawn des loadouts, avec multiplicateur ou valeurs exactes.
-- `server` : installation SteamCMD, config validée par le schéma officiel du jeu, start/stop/status/logs, scénarios.
-- `game` : lance le jeu avec tes addons, se connecte à un serveur, lit les logs, ferme.
-- `env_check` : diagnostic complet de l'installation, plus enregistrement des chemins.
-- `wb_close` : ferme Workbench proprement.
-- Prompt `/server-mod`.
-- Lecteur de `resourceDatabase.rdb` : **GUID de toutes les ressources du jeu** (105 000+), exploité par `asset_search`,
-  les overrides et la duplication.
-
-**Corrections vérifiées sur le jeu réel**
-- `server_config` générait des clés retirées (`gameHostBindPort`…) qu'un serveur 1.8 refuse.
-- `game_duplicate` ne trouvait aucun fichier, le jeu étant entièrement packé.
-- `asset_search` tronquait les chemins (`Prefabs/` disparaissait) et n'avait presque aucun GUID.
-- `wb_state` affichait « game mode » sans monde ouvert ; `wb_projects` ne voyait aucun projet ;
-  `wb_open_resource` annonçait un succès en cas d'échec ; `wb_execute_action` ignorait le module ciblé.
-- Recettes de prefab : composants et chemins inexistants (`RotorComponent`, `Soldier_Base.et`…) remplacés par les vrais.
-  `npm run check:recipes` les vérifie contre les `.pak`.
-- Recettes et KB gamemode réécrites pour l'API 1.8 : `SaveGameManager`, nouvelle signature de `CanPlayerSpawn_S`,
-  `IsHQRadioTrafficPossible`.
-- `script_create` ne génère plus d'`override proto …` impossibles ni de getters vides.
+1. **Researches** the 1.8 API (8,984 classes, their methods, 251 global enums), the knowledge base, the BI wiki and
+   the game files. The files are read straight from the `.pak` archives, with the GUID of every resource.
+2. **Generates** the addon: `.gproj`, Enforce scripts, prefabs, configs, UI layouts, overrides.
+3. **Compiles** the scripts with a headless Workbench and fixes the errors (`file:line`).
+4. **Packs** the addon (`data.pak` + `.gproj` + `resourceDatabase.rdb`), the format the game and the server load.
+5. **Tests** it: starts the game with the mod, or installs and starts a dedicated server, then reads the logs.
+6. Drives **Workbench live** when needed (entities, layers, prefabs, scenarios…), then closes it cleanly.
 
 ---
 
-## Prérequis
+## What's new in this fork
+
+**Data updated for 1.8**
+- API index rebuilt from Workbench's **1.8.0** docs: 8,984 classes (up from 8,693), core types (`string`,
+  `array`, `vector`, `map`…) included, **251 global enums** added, detailed descriptions and the source file of
+  every class.
+- Fixed: about 20% of method names were corrupted (`SourceToEntityIEntitySource`) and therefore unsearchable.
+- Methods that Doxygen dropped are recovered (e.g. `WorldEditorAPI.DeleteEntity`, `LockEntityLayer`).
+- Rewritten scraper: from Workbench's local docs or from the BI website (`npm run scrape` / `npm run scrape:remote`).
+
+**New tools**
+- `mod`: `compile` (headless Workbench, errors as `file:line`), `pack`, and `build` = compile + pack. The old
+  `build` hung forever.
+- `config_override`: override any game config or prefab, like Workbench's "Override in addon", but without Workbench.
+- `economy`: XP, rank thresholds, arsenal costs, loadout respawn costs, with a multiplier or exact values.
+- `server`: SteamCMD install, config validated against the game's official schema, start/stop/status/logs, scenarios.
+- `game`: starts the game with your addons, connects to a server, reads the logs, closes it.
+- `env_check`: full health check of the setup, and saving of custom paths.
+- `wb_close`: closes Workbench cleanly.
+- `/server-mod` prompt.
+- `resourceDatabase.rdb` reader: **GUIDs of every game resource** (105,000+), used by `asset_search`, the
+  overrides and duplication.
+
+**Fixes verified against the real game**
+- `server_config` generated removed keys (`gameHostBindPort`…) that a 1.8 server rejects.
+- `game_duplicate` never found any file, because the game is fully packed.
+- `asset_search` truncated paths (`Prefabs/` went missing) and had almost no GUIDs.
+- `wb_state` reported "game mode" with no world open; `wb_projects` saw no projects; `wb_open_resource` reported
+  success on failure; `wb_execute_action` ignored the target module.
+- Prefab recipes: non-existent components and paths (`RotorComponent`, `Soldier_Base.et`…) replaced with the real
+  ones. `npm run check:recipes` checks them against the `.pak` files.
+- Gamemode recipes and knowledge base rewritten for the 1.8 API: `SaveGameManager`, the new `CanPlayerSpawn_S`
+  signature, `IsHQRadioTrafficPossible`.
+- `script_create` no longer generates impossible `override proto …` methods or empty getters.
+
+---
+
+## Requirements
 
 | | |
 |---|---|
-| **Windows 10/11** | Workbench n'existe que sous Windows |
+| **Windows 10/11** | Workbench only exists on Windows |
 | **Node.js 20+** | `node --version` |
-| **Arma Reforger** (Steam) | le jeu, pour lire les données et tester |
-| **Arma Reforger Tools** (Steam) | Workbench `ArmaReforgerWorkbenchSteamDiag.exe`, pour compiler et packager |
-| *(optionnel)* Arma Reforger Server | `server install` le télécharge tout seul via SteamCMD |
+| **Arma Reforger** (Steam) | the game, to read its data and to test |
+| **Arma Reforger Tools** (Steam) | Workbench `ArmaReforgerWorkbenchSteamDiag.exe`, to compile and pack |
+| *(optional)* Arma Reforger Server | `server install` downloads it for you through SteamCMD |
 
 ---
 
 ## Installation
 
-Une seule commande, rien à cloner. Il faut juste **Node.js 20+**.
+One command, nothing to clone. All you need is **Node.js 20+**.
 
-### Option A : plugin Claude Code (recommandé)
+### Option A: Claude Code plugin (recommended)
 
-Dans Claude Code :
+In Claude Code:
 
 ```
 /plugin marketplace add MyckaelAutier/enfusion-mcp-ma
 /plugin install enfusion-mcp-ma@enfusion-mcp-ma
 ```
 
-Le plugin installe le serveur MCP (depuis npm, toujours en dernière version) et une skill qui apprend à Claude le bon
-déroulé de travail Arma Reforger.
+The plugin installs the MCP server (from npm, always the latest version) and a skill that teaches Claude the right
+Arma Reforger workflow.
 
-### Option B : serveur MCP seul
+### Option B: MCP server only
 
 ```bash
 claude mcp add --scope user enfusion-mcp -- cmd /c npx -y enfusion-mcp-ma@latest
 ```
 
-### Option C : Claude Desktop
+### Option C: Claude Desktop
 
-`%APPDATA%\Claude\claude_desktop_config.json` :
+`%APPDATA%\Claude\claude_desktop_config.json`:
 
 ```json
 {
@@ -139,20 +138,20 @@ claude mcp add --scope user enfusion-mcp -- cmd /c npx -y enfusion-mcp-ma@latest
 }
 ```
 
-Dans tous les cas : redémarre Claude, puis vérifie avec `/mcp` que `enfusion-mcp` est connecté. Le tout premier
-démarrage télécharge le paquet (environ 6 Mo), les suivants sont instantanés.
+In every case, restart Claude, then check with `/mcp` that `enfusion-mcp` is connected. The very first start
+downloads the package (about 6 MB); later starts are instant.
 
-> Tu avais l'ancien paquet (`npx -y enfusion-mcp`, bloqué en 0.6.1) ? Retire-le d'abord :
+> Had the old package (`npx -y enfusion-mcp`, stuck at 0.6.1)? Remove it first:
 > `claude mcp remove enfusion-mcp --scope user`.
 
-**Mettre à jour** : avec `@latest`, le dernier paquet publié est pris à chaque démarrage. Pour le plugin :
+**Updating**: with `@latest`, the newest published package is used on every start. For the plugin:
 `/plugin marketplace update enfusion-mcp-ma`.
 
 ---
 
-## Premiers pas
+## Getting started
 
-Demande simplement à Claude : **« Lance env_check »**. Tu obtiens par exemple :
+Just ask Claude: **"run env_check"**. You get something like:
 
 ```
 ✅ Game: C:\Program Files (x86)\Steam\steamapps\common\Arma Reforger (v1.8.0.13)
@@ -163,29 +162,29 @@ Demande simplement à Claude : **« Lance env_check »**. Tu obtiens par exemple
 ✅ Addons (projectPath): …\ArmaReforgerWorkbench\addons — 5 addon(s)
 ```
 
-Si un chemin n'est pas standard : *« env_check configure gamePath = D:\Steam\…\Arma Reforger »*. C'est enregistré
-dans `~/.enfusion-mcp/config.json`.
+If a path is non-standard: *"env_check configure gamePath = D:\Steam\…\Arma Reforger"*. It is saved to
+`~/.enfusion-mcp/config.json`.
 
 ---
 
-## Créer un mod de A à Z
+## Building a mod from A to Z
 
-Le cycle complet, que Claude enchaîne tout seul :
+The full cycle, which Claude runs on its own:
 
-| Étape | Outil | Détail |
+| Step | Tool | Detail |
 |---|---|---|
-| 1. Rechercher | `api_search`, `wb_knowledge`, `wiki_search`, `asset_search`, `game_read` | jamais de méthode inventée |
-| 2. Créer l'addon | `mod` `create` | `.gproj` + arborescence, 10 patterns disponibles |
-| 3. Écrire | `script_create`, `prefab`, `layout_create`, `menu_create`, `config_create`, `config_override`, `economy`, `project` | |
-| 4. Vérifier | `mod` `validate` | contrôle statique, sans Workbench |
-| 5. **Compiler** | `mod` `compile` | Workbench headless (~5 s), erreurs `fichier:ligne` |
-| 6. **Packager** | `mod` `build` | compile puis pack → `Documents/My Games/ArmaReforgerWorkbench/packed/<Addon>` |
-| 7. Tester en jeu | `game` `launch` (addons, connect, world) → `game` `logs` → `game` `stop` | |
-| 8. Tester en multi | `server` `config` → `start` → `logs` + `game` `launch` connect `127.0.0.1` | |
-| 9. Éditeur (optionnel) | `wb_launch` → `wb_*` → `wb_close` → `wb_cleanup` | placement d'entités, mondes, scénarios |
-| 10. Publier | Workbench → *Publish* | le Workshop reste une étape manuelle |
+| 1. Research | `api_search`, `wb_knowledge`, `wiki_search`, `asset_search`, `game_read` | never invents a method |
+| 2. Create the addon | `mod` `create` | `.gproj` + folder layout, 10 patterns available |
+| 3. Write | `script_create`, `prefab`, `layout_create`, `menu_create`, `config_create`, `config_override`, `economy`, `project` | |
+| 4. Check | `mod` `validate` | static checks, no Workbench needed |
+| 5. **Compile** | `mod` `compile` | headless Workbench (~5 s), errors as `file:line` |
+| 6. **Pack** | `mod` `build` | compile then pack → `Documents/My Games/ArmaReforgerWorkbench/packed/<Addon>` |
+| 7. Test in game | `game` `launch` (addons, connect, world) → `game` `logs` → `game` `stop` | |
+| 8. Test multiplayer | `server` `config` → `start` → `logs` + `game` `launch` connect `127.0.0.1` | |
+| 9. Editor (optional) | `wb_launch` → `wb_*` → `wb_close` → `wb_cleanup` | placing entities, worlds, scenarios |
+| 10. Publish | Workbench → *Publish* | the Workshop remains a manual step |
 
-Exemple de résultat de `mod` `compile` en cas d'erreur :
+Example `mod` `compile` output on an error:
 
 ```
 **Scripts:** FAILED (4s)
@@ -196,33 +195,32 @@ Exemple de résultat de `mod` `compile` en cas d'erreur :
 
 ---
 
-## Mods serveur : XP, rangs, coûts
+## Server mods: XP, ranks, costs
 
-Les valeurs d'économie sont des **configs du jeu**. Pour les changer, un mod place un **override** : un fichier au
-même chemin que l'original, avec un `.meta` portant **le même GUID**, qui ne contient que le **delta** (chaque objet
-modifié est désigné par son `{ID}`). C'est ce que fait Workbench avec « Override in addon », et c'est ce que génèrent
-`economy` et `config_override`. Les valeurs non mentionnées gardent celles du jeu, et les mises à jour de Bohemia
-continuent de s'appliquer.
+Economy values live in **game configs**. To change them, a mod ships an **override**: a file at the same path as
+the original, with a `.meta` carrying **the same GUID**, containing only the **delta** (each changed object is
+addressed by its `{ID}`). That is what Workbench's "Override in addon" does, and what `economy` and
+`config_override` generate. Values you don't mention keep the game's values, and Bohemia's updates keep applying.
 
-### `economy` : les réglages courants
+### `economy`: the common settings
 
-| Catégorie | Fichiers du jeu | Valeur | Clé |
+| Category | Game files | Value | Key |
 |---|---|---|---|
-| `xp` | `Configs/Campaign/XPRewards.conf` + `CampaignXPRewards.conf` (Conflict) | `m_iRewardXP` | ID de récompense : `ENEMY_KILL`, `BASE_SEIZED`, `RELAY_RECONFIGURED`… |
+| `xp` | `Configs/Campaign/XPRewards.conf` + `CampaignXPRewards.conf` (Conflict) | `m_iRewardXP` | reward ID: `ENEMY_KILL`, `BASE_SEIZED`, `RELAY_RECONFIGURED`… |
 | `ranks` | `Configs/Ranks/BaseMilitaryRanks.conf` + FIA | `m_iRequiredXP` | `PRIVATE`, `CORPORAL`, `SERGEANT`… |
-| `arsenal` | `Configs/EntityCatalog/<Faction>/InventoryItems_EntityCatalog_<Faction>.conf` | `m_iSupplyCost`, `m_eRequiredRank` | regex sur le prefab (`M16`, `AK74\|PKM`) |
-| `loadouts` | `Configs/EntityCatalog/<Faction>/Characters_EntityCatalog_<Faction>.conf` | `m_fSpawnSupplyCost`, `m_eRequiredRank` | regex sur le prefab (`Sniper`, `MG`) |
+| `arsenal` | `Configs/EntityCatalog/<Faction>/InventoryItems_EntityCatalog_<Faction>.conf` | `m_iSupplyCost`, `m_eRequiredRank` | regex on the prefab (`M16`, `AK74\|PKM`) |
+| `loadouts` | `Configs/EntityCatalog/<Faction>/Characters_EntityCatalog_<Faction>.conf` | `m_fSpawnSupplyCost`, `m_eRequiredRank` | regex on the prefab (`Sniper`, `MG`) |
 
-Exemples de demandes : *« economy inspect xp »*, *« double l'XP mais garde les pénalités »*,
-*« les fusils M16 coûtent 6 de supplies »*, *« le sniper US coûte 150 au respawn et demande sergent »*.
+Example requests: *"economy inspect xp"*, *"double XP but keep the penalties"*, *"M16 rifles cost 6 supplies"*,
+*"the US sniper costs 150 to respawn and requires sergeant"*.
 
-Appel brut équivalent :
+Equivalent raw call:
 
 ```json
-{ "action": "set", "category": "xp", "modName": "MonServeur", "multiplier": 2, "values": { "ENEMY_KILL": 50 } }
+{ "action": "set", "category": "xp", "modName": "MyServer", "multiplier": 2, "values": { "ENEMY_KILL": 50 } }
 ```
 
-Sortie :
+Output:
 
 ```
 - Configs/Campaign/XPRewards.conf (GUID {E6FC4537B53EA00B}) — 5 change(s):
@@ -230,20 +228,20 @@ Sortie :
   - SCR_XPRewardInfo {5E0E812546D6087F} [m_eRewardID=VETERANCY] · m_iRewardXP: 75 → 150
 ```
 
-Avec `multiplier`, seuls les **gains** (valeurs positives) sont multipliés pour `xp` et `ranks`. Pour changer une
-pénalité, donne sa valeur exacte.
+With `multiplier`, only **gains** (positive values) are scaled for `xp` and `ranks`. To change a penalty, give its
+exact value.
 
-### `config_override` : n'importe quelle valeur du jeu
+### `config_override`: any game value
 
-1. Trouver le fichier : `asset_search` (ex. « GameMode_Campaign ») ou `game_browse`.
-2. `config_override` `inspect` avec un `filter` : objets effectifs avec leurs `{ID}`, héritage résolu.
-3. `config_override` `set` avec des `edits` :
+1. Find the file: `asset_search` (e.g. "GameMode_Campaign") or `game_browse`.
+2. `config_override` `inspect` with a `filter`: the effective objects with their `{ID}`, inheritance resolved.
+3. `config_override` `set` with `edits`:
 
 ```json
 {
   "action": "set",
   "path": "Configs/Ranks/BaseMilitaryRanks.conf",
-  "modName": "MonServeur",
+  "modName": "MyServer",
   "edits": [
     { "where": { "m_iRank": "^SERGEANT$" }, "property": "m_iRequiredXP", "value": "2000" },
     { "className": "SCR_RankInfoCampaign", "property": "m_iRadioRespawnCooldown", "multiply": 0.5 }
@@ -251,210 +249,213 @@ pénalité, donne sa valeur exacte.
 }
 ```
 
-Chaque edit choisit ses objets par `id`, `className` et/ou `where` (regex sur les propriétés de l'objet ou de ses
-parents, ex. `m_sEntityPrefab`), puis applique `value`, `multiply` ou `add`. Relancer `set` complète l'override
-existant. `config_override` `list` montre les overrides d'un mod et signale ceux à qui il manque un `.meta`.
+Each edit selects its objects by `id`, `className` and/or `where` (regexes on the properties of the object or of
+its parents, e.g. `m_sEntityPrefab`), then applies `value`, `multiply` or `add`. Running `set` again extends the
+existing override. `config_override` `list` shows a mod's overrides and flags any that are missing their `.meta`.
 
-### Déploiement
+### Deployment
 
-Un mod d'override doit tourner **sur le serveur** et les clients doivent l'avoir. En public : publie-le sur le
-Workshop, puis ajoute-le à `"mods"` du `server.json` (les joueurs le téléchargent automatiquement). En local :
-`server start` / `game launch` avec `addons: ["MonServeur"]`.
+An override mod has to run **on the server**, and clients need it too. For a public server: publish it on the
+Workshop, then add it to `"mods"` in `server.json` (players download it automatically). Locally: `server start` /
+`game launch` with `addons: ["MyServer"]`.
 
 ---
 
-## Serveur dédié local
+## Local dedicated server
 
 ```text
-server install       → télécharge SteamCMD puis Arma Reforger Server (app 1874900, anonyme, plusieurs Go)
-server status        → avancement de l'installation, état, config, logs
-server scenarios     → les 37 scénarios du jeu avec leur ID ({ECC61978EDCC2B5A}Missions/23_Campaign.conf…)
-server config        → server.json généré ET validé contre backend/DSConfigSchema.json du jeu
-server validate      → vérifie un server.json existant (clés inconnues, types, formats)
-server start         → démarre avec tes addons packés (-addonsDir/-addons) et/ou des mods Workshop
-server logs          → fin de console.log, ou seulement les (E)/(W)/(F)
-server stop          → arrêt propre (force=true pour tuer)
+server install       → downloads SteamCMD, then Arma Reforger Server (app 1874900, anonymous, several GB)
+server status        → install progress, state, config, logs
+server scenarios     → the game's 37 scenarios with their ID ({ECC61978EDCC2B5A}Missions/23_Campaign.conf…)
+server config        → server.json generated AND validated against the game's backend/DSConfigSchema.json
+server validate      → checks an existing server.json (unknown keys, types, formats)
+server start         → starts with your packed addons (-addonsDir/-addons) and/or Workshop mods
+server logs          → tail of console.log, or only the (E)/(W)/(F) lines
+server stop          → clean shutdown (force=true to kill)
 ```
 
-Options de config gérées : nom, scénario, joueurs max, port, mots de passe joueur et admin, admins, visibilité,
-cross-play, BattlEye, vue 3e personne, distances de vue, RCON, persistance (autosave), limite d'IA, file d'attente,
-surcharges du mission header, mods Workshop (`modId`, `version`).
+Supported config options: name, scenario, max players, port, player and admin passwords, admins, visibility,
+cross-play, BattlEye, third-person view, view distances, RCON, persistence (autosave), AI limit, join queue,
+mission header overrides, Workshop mods (`modId`, `version`).
 
-Ensuite, pour te connecter : `game launch` avec `connect: "127.0.0.1"` et les mêmes `addons`.
+Then, to join it: `game launch` with `connect: "127.0.0.1"` and the same `addons`.
 
-Emplacements par défaut : serveur `~/.enfusion-mcp/server`, profil, saves et logs `~/.enfusion-mcp/server-profile`,
+Default locations: server `~/.enfusion-mcp/server`, profile, saves and logs `~/.enfusion-mcp/server-profile`,
 SteamCMD `~/.enfusion-mcp/steamcmd`.
 
 ---
 
-## Référence des outils
+## Tool reference
 
-### Construction et test
-| Outil | Rôle |
+### Build and test
+| Tool | Purpose |
 |---|---|
-| `env_check` | diagnostic complet ; `configure` enregistre les chemins |
+| `env_check` | full health check; `configure` saves paths |
 | `mod` | `create` · `validate` · `compile` · `pack` · `build` |
 | `game` | `launch` (addons, connect, world, windowed) · `stop` · `status` · `logs` |
 | `server` | `install` · `update` · `config` · `validate` · `start` · `stop` · `status` · `logs` · `scenarios` |
-| `server_config` | ancien générateur de `server.json` (aligné sur le schéma 1.8) |
-| `workshop_info` | métadonnées Workshop d'un `.gproj` |
+| `server_config` | legacy `server.json` generator (aligned with the 1.8 schema) |
+| `workshop_info` | Workshop metadata of a `.gproj` |
 
-### Économie et overrides
-| Outil | Rôle |
+### Economy and overrides
+| Tool | Purpose |
 |---|---|
-| `economy` | XP, rangs, coûts arsenal, coûts de respawn (`inspect` / `set`) |
-| `config_override` | override générique de config ou prefab (`inspect` / `set` / `list`) |
-| `game_duplicate` | copie d'un prefab ou d'une config du jeu dans le mod, avec un nouveau GUID |
+| `economy` | XP, ranks, arsenal costs, respawn costs (`inspect` / `set`) |
+| `config_override` | generic config or prefab override (`inspect` / `set` / `list`) |
+| `game_duplicate` | copies a game prefab or config into the mod, with a new GUID |
 
-### Connaissance du jeu
-| Outil | Rôle |
+### Game knowledge
+| Tool | Purpose |
 |---|---|
-| `api_search` | classes, méthodes, propriétés, enums de l'API 1.8 (héritage inclus, arbre `format: tree`) |
-| `component_search` | composants par catégorie (véhicule, arme, IA, UI…) et événements |
-| `wb_knowledge` | base de connaissances modding (patterns vérifiés) |
-| `wiki_search` / `wiki_read` | 274 pages : wiki BI et tutoriels Doxygen |
-| `asset_search` | recherche d'assets du jeu, avec leur GUID `{…}path` |
-| `game_browse` / `game_read` | parcourir ou lire les fichiers du jeu (dans les `.pak`) |
-| `prefab` `inspect` | chaîne d'héritage complète d'un prefab |
+| `api_search` | classes, methods, properties, enums of the 1.8 API (inheritance included, `format: tree`) |
+| `component_search` | components by category (vehicle, weapon, AI, UI…) and events |
+| `wb_knowledge` | modding knowledge base (verified patterns) |
+| `wiki_search` / `wiki_read` | 274 pages: BI wiki and Doxygen tutorials |
+| `asset_search` | game asset search, with their `{GUID}path` |
+| `game_browse` / `game_read` | browse or read the game files (inside the `.pak` archives) |
+| `prefab` `inspect` | full inheritance chain of a prefab |
 
-### Génération
-| Outil | Rôle |
+### Generation
+| Tool | Purpose |
 |---|---|
-| `script_create` | scripts Enforce (component, gamemode, action, entity, manager, modded, basic) |
-| `prefab` `create` | prefabs depuis des recettes vérifiées sur les vrais prefabs du jeu |
-| `layout_create` / `layout_recipe` / `menu_create` | UI : HUD, menus, dialogues, recettes extraites du jeu |
-| `config_create` | factions, mission headers, catalogues, placeables |
-| `gamemode_scaffold` | `modded SCR_GameModeCampaign` composé de fonctionnalités (respawn, seeding, sauvegarde…) |
-| `scenario_create_conflict` / `scenario_create` | scénario Conflict complet ; objectifs Scenario Framework |
-| `animation_graph` | graphes d'animation véhicules (création, inspection, validation) |
-| `building_setup` | bâtiment destructible depuis un export Blender |
-| `project` | lire, écrire, parcourir les fichiers du mod |
+| `script_create` | Enforce scripts (component, gamemode, action, entity, manager, modded, basic) |
+| `prefab` `create` | prefabs from recipes verified against the game's real prefabs |
+| `layout_create` / `layout_recipe` / `menu_create` | UI: HUDs, menus, dialogs, recipes extracted from the game |
+| `config_create` | factions, mission headers, catalogs, placeables |
+| `gamemode_scaffold` | a `modded SCR_GameModeCampaign` composed from features (respawn, seeding, save…) |
+| `scenario_create_conflict` / `scenario_create` | full Conflict scenario; Scenario Framework objectives |
+| `animation_graph` | vehicle animation graphs (authoring, inspection, validation) |
+| `building_setup` | destructible building from a Blender export |
+| `project` | read, write and browse the mod's files |
 
-### Workbench en direct (API NET)
+### Live Workbench (NET API)
 `wb_launch`, `wb_close`, `wb_cleanup`, `wb_connect`, `wb_diagnose`, `wb_state`, `wb_play`, `wb_stop`, `wb_save`,
-`wb_undo_redo`, `wb_open_resource`, `wb_execute_action` (avec `module`), `wb_reload`, `wb_entity_create`,
+`wb_undo_redo`, `wb_open_resource`, `wb_execute_action` (with `module`), `wb_reload`, `wb_entity_create`,
 `wb_entity_delete`, `wb_entity_list`, `wb_entity_inspect`, `wb_entity_modify`, `wb_entity_select`,
 `wb_entity_duplicate`, `wb_component`, `wb_read_props`, `wb_terrain`, `wb_layers`, `wb_resources`, `wb_prefabs`,
 `wb_clipboard`, `wb_script_editor`, `wb_localization`, `wb_projects`, `wb_validate`.
 
-Les handlers Enforce de ces outils (`mod/Scripts/WorkbenchGame/EnfusionMCP/`) sont copiés dans l'addon ouvert par
-`wb_launch`. Retire-les avec `wb_cleanup` avant de publier ; `mod build` te le rappelle s'ils sont présents.
+The Enforce handlers behind these tools (`mod/Scripts/WorkbenchGame/EnfusionMCP/`) are copied into the addon that
+`wb_launch` opens. Remove them with `wb_cleanup` before publishing; `mod build` reminds you if they are present.
 
-### Ressources MCP
-| URI | Contenu |
+### MCP resources
+| URI | Content |
 |---|---|
-| `enfusion://class/{className}` | documentation complète d'une classe |
-| `enfusion://pattern/{patternName}` | pattern de mod |
-| `enfusion://group/{groupName}` | groupe d'API et ses classes |
+| `enfusion://class/{className}` | full documentation of a class |
+| `enfusion://pattern/{patternName}` | mod pattern |
+| `enfusion://group/{groupName}` | API group and its classes |
 
 ---
 
-## Prompts guidés
+## Guided prompts
 
-| Prompt | Usage |
+| Prompt | Use |
 |---|---|
-| `/create-mod` | de l'idée au mod compilé, packagé et testé (gros projets découpés en phases dans `MODPLAN.md`) |
-| `/modify-mod` | faire évoluer un mod existant |
-| `/server-mod` | mod serveur (XP, coûts, rangs, règles) et test sur serveur local |
+| `/create-mod` | from idea to a compiled, packed and tested mod (big projects split into phases in `MODPLAN.md`) |
+| `/modify-mod` | evolve an existing mod |
+| `/server-mod` | server mod (XP, costs, ranks, rules) tested on a local server |
 
 ---
 
 ## Configuration
 
-Tout est optionnel. Ordre de priorité : variables d'environnement, puis `~/.enfusion-mcp/config.json`, puis
-`enfusion-mcp.config.json` du dépôt, puis les valeurs par défaut.
+Everything is optional. Priority order: environment variables, then `~/.enfusion-mcp/config.json`, then the
+repository's `enfusion-mcp.config.json`, then the defaults.
 
-| Variable | Clé config.json | Défaut |
+| Variable | config.json key | Default |
 |---|---|---|
 | `ENFUSION_WORKBENCH_PATH` | `workbenchPath` | `C:\Program Files (x86)\Steam\steamapps\common\Arma Reforger Tools` |
-| `ENFUSION_GAME_PATH` | `gamePath` | dossier `Arma Reforger` voisin |
+| `ENFUSION_GAME_PATH` | `gamePath` | sibling `Arma Reforger` folder |
 | `ENFUSION_PROJECT_PATH` | `projectPath` | `Documents\My Games\ArmaReforgerWorkbench\addons` |
 | `ENFUSION_PACKED_PATH` | `packedPath` | `Documents\My Games\ArmaReforgerWorkbench\packed` |
 | `ENFUSION_SERVER_PATH` | `serverPath` | `~/.enfusion-mcp/server` |
 | `ENFUSION_SERVER_PROFILE` | `serverProfilePath` | `~/.enfusion-mcp/server-profile` |
 | `ENFUSION_STEAMCMD_PATH` | `steamcmdPath` | `~/.enfusion-mcp/steamcmd` |
 | `ENFUSION_WORKBENCH_HOST` / `_PORT` | `workbenchHost` / `workbenchPort` | `127.0.0.1` / `5775` |
-| `ENFUSION_DEFAULT_MOD` | `defaultMod` | addon ouvert par `wb_launch` |
-| `ENFUSION_EXTRACTED_PATH` | `extractedPath` | `…/extracted` s'il existe |
+| `ENFUSION_DEFAULT_MOD` | `defaultMod` | addon opened by `wb_launch` |
+| `ENFUSION_EXTRACTED_PATH` | `extractedPath` | `…/extracted` if it exists |
 
 ---
 
-## Données embarquées et mise à jour
+## Bundled data and updating it
 
-| Données | Contenu | Source |
+| Data | Content | Source |
 |---|---|---|
-| `data/api/` | 8 984 classes, 128 000+ méthodes, enums, groupes, hiérarchie | Doxygen de Workbench 1.8 |
-| `data/wiki/` | 274 pages (wiki BI et tutoriels) | wiki BI et Doxygen |
-| `data/kb/` | patterns de modding distillés | rédigés et vérifiés |
-| `data/recipes/` | recettes de prefabs et de fonctionnalités gamemode | vérifiées sur les `.pak` 1.8 |
-| à l'exécution | fichiers et GUID du jeu installé | `.pak` + `resourceDatabase.rdb` |
+| `data/api/` | 8,984 classes, 128,000+ methods, enums, groups, hierarchy | Workbench 1.8 Doxygen |
+| `data/wiki/` | 274 pages (BI wiki and tutorials) | BI wiki and Doxygen |
+| `data/kb/` | distilled modding patterns | written and verified |
+| `data/recipes/` | prefab and gamemode feature recipes | verified against the 1.8 `.pak` files |
+| at runtime | files and GUIDs of the installed game | `.pak` + `resourceDatabase.rdb` |
 
-Après une mise à jour du jeu :
+After a game update:
 
 ```bash
-npm run scrape          # régénère l'API depuis Arma Reforger Tools/Workbench/docs (recommandé)
-npm run scrape:remote   # ou depuis community.bistudio.com (souvent en retard d'une version)
-npm run check:recipes   # vérifie que les recettes pointent toujours sur des prefabs/composants existants
+npm run scrape          # rebuild the API from Arma Reforger Tools/Workbench/docs (recommended)
+npm run scrape:remote   # or from community.bistudio.com (often one version behind)
+npm run check:recipes   # check that recipes still point to existing prefabs/components
 npm run build
 ```
 
-Le site de BI protège certaines pages par un challenge Cloudflare. Le mode remote récupère alors ces pages dans la
-doc locale de Workbench.
+The BI website protects some pages with a Cloudflare challenge. Remote mode then takes those pages from Workbench's
+local docs.
 
 ---
 
-## Dépannage
+## Troubleshooting
 
-| Problème | Solution |
+| Problem | Fix |
 |---|---|
-| `mod compile` refuse : « Workbench is open » | `wb_close` d'abord. Deux Workbench sur le même addon peuvent faire planter celui qui est ouvert. `force: true` pour passer outre. |
-| « no world is open in the World Editor » | ouvre un monde (`wb_open_resource` sur un `.ent`) avant les outils d'entités |
-| `wb_reload` : « Reload not confirmed » | Workbench 1.8 n'expose pas d'action de menu fiable ; utilise `mod compile` |
-| Override sans effet | `config_override list` : le `.meta` doit exister avec le GUID d'origine ; reconstruis avec `mod build` |
-| Le serveur s'arrête tout de suite | `server logs errorsOnly: true` ; `server validate` sur la config |
-| Logs | Workbench : `Documents/My Games/ArmaReforgerWorkbench/logs` · jeu : `Documents/My Games/ArmaReforger/logs` · serveur : `~/.enfusion-mcp/server-profile/logs` |
+| `mod compile` refuses: "Workbench is open" | `wb_close` first. Two Workbench instances on the same addon can crash the open one. `force: true` to override. |
+| "no world is open in the World Editor" | open a world (`wb_open_resource` on a `.ent`) before using the entity tools |
+| `wb_reload`: "Reload not confirmed" | Workbench 1.8 exposes no reliable menu action for it; use `mod compile` |
+| Override has no effect | `config_override list`: the `.meta` must exist with the original GUID; rebuild with `mod build` |
+| The server stops right away | `server logs errorsOnly: true`; `server validate` on the config |
+| Logs | Workbench: `Documents/My Games/ArmaReforgerWorkbench/logs` · game: `Documents/My Games/ArmaReforger/logs` · server: `~/.enfusion-mcp/server-profile/logs` |
 
 ---
 
-## Développement
+## Development
 
 ```bash
 git clone https://github.com/MyckaelAutier/enfusion-mcp-ma.git
 cd enfusion-mcp-ma
 npm install
-npm run dev             # serveur MCP depuis les sources (tsx)
+npm run dev             # MCP server from sources (tsx)
 npm test                # 634 tests (vitest)
 npm run build           # dist/
-npm run scrape          # régénère data/api
-npm run check:recipes   # recettes vs jeu installé
-npm run tuning-server   # interface web de réglage des moteurs de véhicules
-npm publish             # publie enfusion-mcp-ma sur npm (le build se lance tout seul)
+npm run scrape          # rebuild data/api
+npm run check:recipes   # recipes vs the installed game
+npm run tuning-server   # web UI for tuning vehicle engines
+npm publish             # publish enfusion-mcp-ma to npm (the build runs automatically)
 ```
 
-Arborescence :
+When releasing, bump the version in `package.json`, `plugin/.claude-plugin/plugin.json` and
+`.claude-plugin/marketplace.json`.
+
+Layout:
 
 ```
 src/
-  tools/        un fichier par outil MCP (mod, server, game, economy, config-override, env-check, wb-*, …)
-  workbench/    client API NET, pilote CLI headless (cli.ts)
-  pak/          lecteur .pak (VFS) et resourceDatabase.rdb
-  formats/      parseur texte Enfusion, moteur d'override
-  scraper/      Doxygen vers data/api
-  templates/    générateurs (scripts, prefabs, layouts, server.json…)
+  tools/        one file per MCP tool (mod, server, game, economy, config-override, env-check, wb-*, …)
+  workbench/    NET API client, headless CLI driver (cli.ts)
+  pak/          .pak reader (VFS) and resourceDatabase.rdb
+  formats/      Enfusion text parser, override engine
+  scraper/      Doxygen to data/api
+  templates/    generators (scripts, prefabs, layouts, server.json…)
   prompts/      /create-mod, /modify-mod, /server-mod
-mod/            handlers Enforce copiés dans Workbench
-plugin/         plugin Claude Code (.mcp.json + skill), publié via .claude-plugin/marketplace.json
-data/           API, wiki, KB, recettes, patterns
+mod/            Enforce handlers copied into Workbench
+plugin/         Claude Code plugin (.mcp.json + skill), published through .claude-plugin/marketplace.json
+data/           API, wiki, KB, recipes, patterns
 tests/          vitest
 ```
 
 ---
 
-## Crédits et licence
+## Credits and license
 
-- Projet original : [steffenbk/enfusion-mcp-BK](https://github.com/steffenbk/enfusion-mcp-BK).
-- Fork, mise à jour 1.8 et nouveaux outils : [MyckaelAutier](https://github.com/MyckaelAutier).
-- Arma Reforger, Enfusion et Workbench sont des marques de Bohemia Interactive. Ce projet n'est pas affilié à
+- Original project: [steffenbk/enfusion-mcp-BK](https://github.com/steffenbk/enfusion-mcp-BK).
+- Fork, 1.8 update and new tools: [MyckaelAutier](https://github.com/MyckaelAutier).
+- Arma Reforger, Enfusion and Workbench are trademarks of Bohemia Interactive. This project is not affiliated with
   Bohemia Interactive.
 
-Licence **MIT**, voir [LICENSE](LICENSE).
+Licensed under **MIT**, see [LICENSE](LICENSE).
