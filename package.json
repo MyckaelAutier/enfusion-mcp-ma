@@ -1,6 +1,6 @@
 {
   "name": "enfusion-mcp",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "type": "module",
   "description": "MCP server for Arma Reforger / Enfusion engine modding — create mods from natural language",
   "bin": {
@@ -14,6 +14,7 @@
     "scrape": "tsx scripts/scrape.ts",
     "scrape:remote": "tsx scripts/scrape.ts --source remote",
     "scrape:local": "tsx scripts/scrape.ts --source local",
+    "check:recipes": "tsx scripts/check-recipes.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "npm run build"
@@ -44,9 +45,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/steffenbk/enfusion-mcp-BK.git"
+    "url": "https://github.com/MyckaelAutier/enfusion-mcp-BK.git"
   },
-  "homepage": "https://github.com/steffenbk/enfusion-mcp-BK",
+  "homepage": "https://github.com/MyckaelAutier/enfusion-mcp-BK",
   "license": "MIT",
   "keywords": [
     "mcp",
