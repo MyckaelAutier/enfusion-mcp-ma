@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "enfusion-mcp-ma",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Arma Reforger 1.8 modding toolkit: API and game-data knowledge, headless compile/pack, game and dedicated server control, XP/cost/config overrides, live Workbench control.",
   "author": {
     "name": "Myckael",

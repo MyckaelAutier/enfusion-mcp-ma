@@ -1,6 +1,6 @@
 {
   "name": "enfusion-mcp-ma",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "type": "module",
   "description": "MCP server for Arma Reforger 1.8 modding: API + game data knowledge, headless compile/pack, game & dedicated server control, economy/config overrides",
   "bin": {

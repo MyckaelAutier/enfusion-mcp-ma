@@ -13,7 +13,7 @@
       "name": "enfusion-mcp-ma",
       "source": "./plugin",
       "description": "Arma Reforger 1.8 modding toolkit: API and game-data knowledge, headless compile/pack, game and dedicated server control, XP/cost/config overrides, live Workbench control.",
-      "version": "0.13.0",
+      "version": "0.13.1",
       "category": "development"
     }
   ]
